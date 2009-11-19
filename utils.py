@@ -14,18 +14,22 @@ class util(object):
             year = Allsect[0]
             day = Allsect[2]
             month = Allsect[1]         
+            # add leading digits if they are missing
             if len(year) < 4 : 
                 year = "20%s" % year        
             if len(month) < 2:
                 month = "0%s" % month
             if len(day) < 2:
                 day = "0%s" % day         
-            good_date_string = "%s-%s-%s" % (year,month,day )
+            # return string for human consumption;
+            # datetime.date for django consumption
+            good_date_str = "%s-%s-%s" % (year,month,day )
             good_date_obj = datetime.date(int(year), int(month), int(day))
-            return good_date_string, good_date_obj
+            return good_date_str, good_date_obj
 
     @staticmethod
     def get_good_sex(gender):
+        # TODO improve patterns so 'monkey' isnt a match for 'male'
         male_pattern = "(m[a-z]*)"
         female_pattern =  "(f[a-z]*)"
         its_a_boy = re.match(male_pattern, gender, re.I) 
@@ -40,6 +44,5 @@ class util(object):
     @staticmethod
     def sloppy_date_to_age_in_months(date):
         delta = datetime.date.today() - date
-        years = delta.days / 365.25
-        # FIXME: i18n
+        #years = delta.days / 365.25
         return str(int(delta.days/30.4375))

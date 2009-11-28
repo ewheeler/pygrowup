@@ -39,6 +39,149 @@ class util(object):
                     table.split('.')[0].rpartition('_')
                 setattr(self, table_name, json.load(f))
 
+    @staticmethod
+    def _get_zscores_by_month(table_name, month):
+        table = getattr(self, table_name)
+        for scores in table:
+            m = dict.get("Month")
+            if int(m) is month:
+                return scores
+
+    @staticmethod
+    def _get_zscores_by_height(table_name, height):
+        table = getattr(self, table_name)
+        for scores in table:
+            m = dict.get("Height")
+            if float(m) is height:
+                return scores
+
+    @staticmethod
+    def _add_gender_to_string(table_name, gender):
+        if gender == "M":
+            table_name = table_name + 'boys_'
+            return table_name
+        elif gender == "F":
+            table_name = table_name + 'girls_'
+            return table_name
+        else:
+            raise 
+
+    @staticmethod
+    def _add_age_range_to_string(table_name, age_in_months):
+        if t < 24:
+            table_name = table_name + '0_2'
+        if t >= 24:
+            table_name = table_name + '2_5'
+        return table_name
+
+    @staticmethod
+    def zscore_for_measurement(indicator, measurement, age_in_months, gender, height=None):
+        assert gender in ["M", "F"]
+        assert indicator in ["lhfa", "wfl", "wfh", "wfa"] 
+
+        # initial table string
+        table_name = indicator + '_'
+        # check gender and update table_name string
+        table_name = _add_gender_to_string(table_name, gender)
+
+        # check age and update table_name string
+        t = age_in_months
+        if indicator == "wfa":
+            # weight for age has only one table per gender
+            table_name = table_name + "0_5"
+        else:
+            # all other tables come as a pair: 0-2 and 2-5
+            table_name = _add_age_range_to_string(table_name, int(t))
+
+        # get zscore from appropriate table
+        if indicator == "wfh" and height is not None:
+            # round height to closest .5
+            # e.g., 66.7 =>
+            lookup = _dumb_round(height)
+            zscores = _get_zscores_by_height(table_name, height)
+        else:
+            zscores = _get_zscores_by_month(table_name, t)
+
+        # this is our length or height measurement
+        y = float(measurement)
+
+        # fetch necessary scores from zscores dict and cast as floats
+        # L(t)
+        box-cox_power = float(zscores.get("L"))
+        # M(t)
+        median_for_age = float(zscores.get("M"))
+        # S(t)
+        coefficient_of_variance_for_age = float(zscores.get("S"))
+
+        # S(t)L(t) = StDev(t)
+        stdev_for_age = coefficient_of_variance_for_age * box-cox_power 
+
+        ###
+        #           [y/M(t)]^L(t) - 1
+        #   Zind =  -----------------
+        #               S(t)L(t)
+        ###
+
+        zscore = ((((y / median_for_age)**box-cox_power) - float(1) ) /\
+                        stdev_for_age)
+
+        if indicator not in ["wfl", "wfh", "wfa"]:
+            # return length/height-for-age (lhfa) without further processing
+            # L(t) is always 1 for this indicator, so differences between
+            # adjacent SDs (e.g., 2 SD and 3 SD) are constant for a specific
+            # age but varied at different ages
+            return zscore
+        elif (abs(zscore) <= float(3)):
+            # (see below comment)
+            return zscore
+        else:
+            # weight-based indicators present right-skewed distributions
+            # so use restricted application of LMS method (limiting Box-Cox
+            # normal distribution to interval corresponding to z-scores where
+            # empirical data are available. z-scores beyond +/- 3 SDs are
+            # fixed to the distance between +/- 2 SDs and +/- 3 SD 
+            # this avoids making assumptions about the distribution of data
+            # beyond the limits of observed values
+            #
+            #            _
+            #           |
+            #           |       Zind            if |Zind| <= 3
+            #           |
+            #           |
+            #           |       y - SD3pos
+            #   Zind* = | 3 + ( ----------- )   if Zind > 3
+            #           |         SD23pos
+            #           |
+            #           |
+            #           |
+            #           |        y - SD3neg
+            #           | -3 + ( ----------- )  if Zind < -3
+            #           |          SD23neg
+            #           |
+            #           |_
+            if (zscore > float(3)):
+                # get cutoffs from zscores dict
+                SD2pos = float(zscores.get("SD2"))
+                SD3pos = float(zscores.get("SD3"))
+                # compute distance
+                SD23pos = SD3pos - SD2pos
+
+                # compute final z-score
+                zscore = float(3) + ((y - SD3pos)/SD23pos)
+                return zscore
+
+            if (zscore < float(-3)):
+                # get cutoffs from zscores dict
+                SD2neg = float(zscores.get("SD2neg"))
+                SD3neg = float(zscores.get("SD3neg"))
+                # compute distance
+                SD23neg = SD2neg - SD3neg
+
+                # compute final z-score
+                zscore = float(-3) + ((y - SD3neg)/SD23neg)
+                return zscore
+        
+
     @staticmethod   
     def get_good_date(date):
         delimiters = r"[./\\-]+"

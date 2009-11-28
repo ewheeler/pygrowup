@@ -2,51 +2,38 @@
 # vim: ai ts=4 sts=4 et sw=4
 from __future__ import with_statement
 
+import os
 import re
 import datetime
-import json
+try:
+    # NOTE Python 2.5 requires installation of simplejson library
+    # http://pypi.python.org/pypi/simplejson
+    import simplejson as json
+except ImportError:
+    # Python 2.6 includes json library
+    import json
 
 from tables import stunting_boys, stunting_girls
 from tables import weight_for_height as weight_for_height_table
-    
+
 class util(object):
     def __init__(self):
         # load WHO Growth Standards
+        # http://www.who.int/childgrowth/standards/en/
 
-        # weight for length boys 0-2 years
-        with open('wfl_boys_0_2_zscores.json', 'r', encoding='utf-8') as f:
-            self.wfl_boys_0_2 = json.load(f)
-        # weight for length girls 0-2 years
-        with open('wfl_girls_0_2_zscores.json', 'r', encoding='utf-8') as f:
-            self.wfl_girls_0_2 = json.load(f)
+        WHO_tables = [
+            'wfl_boys_0_2_zscores.json',  'wfl_girls_0_2_zscores.json',\
+            'wfh_boys_2_5_zscores.json',  'wfh_girls_2_5_zscores.json',\
+            'lhfa_boys_0_2_zscores.json', 'lhfa_girls_0_2_zscores.json',\
+            'lhfa_boys_2_5_zscores.json', 'lhfa_girls_2_5_zscores.json',\
+            'wfa_boys_0_5_zscores.json',  'wfa_girls_0_5_zscores.json']
 
-        # weight for height boys 2-5 years
-        with open('wfh_boys_2_5_zscores.json', 'r', encoding='utf-8') as f:
-            self.wfh_boys_2_5 = json.load(f)
-        # weight for height girls 2-5 years
-        with open('wfh_girls_2_5_zscores.json', 'r', encoding='utf-8') as f:
-            self.wfh_girls_2_5 = json.load(f)
-
-        # length/height for age boys 0-2 years
-        with open('lhfa_boys_0_2_zscores.json', 'r', encoding='utf-8') as f:
-            self.lhfa_boys_0_2 = json.load(f)
-        # length/height for age girls 0-2 years
-        with open('lhfa_girls_0_2_zscores.json', 'r', encoding='utf-8') as f:
-            self.lhfa_girls_0_2 = json.load(f)
-
-        # length/height for age boys 2-5 years
-        with open('lhfa_boys_2_5_zscores.json', 'r', encoding='utf-8') as f:
-            self.lhfa_boys_2_5 = json.load(f)
-        # length/height for age girls 2-5 years
-        with open('lhfa_girls_2_5_zscores.json', 'r', encoding='utf-8') as f:
-            self.lhfa_girls_2_5 = json.load(f)
-    
-        # weight for age boys 0-5 years
-        with open('wfa_boys_0_5_zscores.json', 'r', encoding='utf-8') as f:
-            self.wfa_boys_0_5 = json.load(f)
-        # weight for age girls 0-5 years
-        with open('wfa_girls_0_5_zscores.json', 'r', encoding='utf-8') as f:
-            self.wfa_girls_0_5 = json.load(f)
+        for table in WHO_tables:
+            table_file = 'apps/childhealth/tables/' + table
+            with open(table_file, 'r') as f:
+                table_name = table.split('.')[0]
+                setattr(self, table_name, json.load(f))
+                #self.wfl_boys_0_2 = json.load(f)
 
     @staticmethod   
     def get_good_date(date):

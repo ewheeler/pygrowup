@@ -29,11 +29,15 @@ class util(object):
             'wfa_boys_0_5_zscores.json',  'wfa_girls_0_5_zscores.json']
 
         for table in WHO_tables:
+            # TODO OS agnostic!
             table_file = 'apps/childhealth/tables/' + table
             with open(table_file, 'r') as f:
-                table_name = table.split('.')[0]
+                # drop _zscores.json from table name and use
+                # result as attribute name
+                # (e.g., wfa_boys_0_5_zscores.json => wfa_boys_0_5)
+                table_name, underscore, zscore_part =\
+                    table.split('.')[0].rpartition('_')
                 setattr(self, table_name, json.load(f))
-                #self.wfl_boys_0_2 = json.load(f)
 
     @staticmethod   
     def get_good_date(date):

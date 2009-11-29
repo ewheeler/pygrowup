@@ -5,6 +5,7 @@ from __future__ import with_statement
 import os
 import re
 import datetime
+import math
 try:
     # NOTE Python 2.5 requires installation of simplejson library
     # http://pypi.python.org/pypi/simplejson
@@ -16,7 +17,7 @@ except ImportError:
 from tables import stunting_boys, stunting_girls
 from tables import weight_for_height as weight_for_height_table
 
-class util(object):
+class childgrowth(object):
     def __init__(self):
         # load WHO Growth Standards
         # http://www.who.int/childgrowth/standards/en/
@@ -39,20 +40,24 @@ class util(object):
                     table.split('.')[0].rpartition('_')
                 setattr(self, table_name, json.load(f))
 
-    @staticmethod
-    def _get_zscores_by_month(table_name, month):
+    def _get_zscores_by_month(self, table_name, month):
         table = getattr(self, table_name)
         for scores in table:
-            m = dict.get("Month")
+            m = scores.get("Month")
             if int(m) is month:
                 return scores
 
-    @staticmethod
-    def _get_zscores_by_height(table_name, height):
+    def _get_zscores_by_height(self, table_name, height):
         table = getattr(self, table_name)
+        # from the windoooows ... to the WALLS
+        lower_bound = math.floor(height)
+        upper_bound = math.ceil(height)
+        # TODO interpolate
         for scores in table:
-            m = dict.get("Height")
-            if float(m) is height:
+            m = scores.get("Height")
+            # not int or float here!
+            if m == str(height):
+                print scores
                 return scores
 
     @staticmethod
@@ -68,21 +73,20 @@ class util(object):
 
     @staticmethod
     def _add_age_range_to_string(table_name, age_in_months):
-        if t < 24:
+        if age_in_months < 24:
             table_name = table_name + '0_2'
-        if t >= 24:
+        if age_in_months  >= 24:
             table_name = table_name + '2_5'
         return table_name
 
-    @staticmethod
-    def zscore_for_measurement(indicator, measurement, age_in_months, gender, height=None):
+    def zscore_for_measurement(self, indicator, measurement, age_in_months, gender, height=None):
         assert gender in ["M", "F"]
         assert indicator in ["lhfa", "wfl", "wfh", "wfa"] 
 
         # initial table string
         table_name = indicator + '_'
         # check gender and update table_name string
-        table_name = _add_gender_to_string(table_name, gender)
+        table_name = self._add_gender_to_string(table_name, gender)
 
         # check age and update table_name string
         t = age_in_months
@@ -91,30 +95,57 @@ class util(object):
             table_name = table_name + "0_5"
         else:
             # all other tables come as a pair: 0-2 and 2-5
-            table_name = _add_age_range_to_string(table_name, int(t))
+            table_name = self._add_age_range_to_string(table_name, int(t))
 
         # get zscore from appropriate table
         if indicator == "wfh" and height is not None:
-            # round height to closest .5
-            # e.g., 66.7 =>
-            lookup = _dumb_round(height)
-            zscores = _get_zscores_by_height(table_name, height)
+            zscores = self._get_zscores_by_height(table_name, height)
         else:
-            zscores = _get_zscores_by_month(table_name, t)
+            zscores = self._get_zscores_by_month(table_name, t)
 
-        # this is our length or height measurement
+        # this is our length or height or weight measurement
         y = float(measurement)
+        print "MEASUREMENT: " + str(y)
+
+        # indicator-specific methodology
+        # (see section 5.1 of http://www.who.int/entity/childgrowth/standards/\
+        #                                  technical_report/en/index.html)
+        #
+        # TODO accept a recumbent vs standing parameter for deciding 
+        # whether or not to do these adjustments rather than assuming
+        # measurement orientation based on the measurement
+        if indicator == "wfl":
+            # subtract 0.7cm from length measurements in this range
+            # to adjust for child's reclined position 
+            if (float(65.7) < y < float(120.7)):
+                print "subtracting 0.7 from length"
+                print str(y)
+                y = y - float(0.7)
+                print str(y)
+        if indicator == "wfh":
+            # add 0.7cm to all height measurements
+            # (basically to convert all height measurments to lengths)
+            print "adding 0.7 to height"
+            print str(y)
+            y = y + float(0.7)
+            print str(y)
 
         # fetch necessary scores from zscores dict and cast as floats
         # L(t)
-        box-cox_power = float(zscores.get("L"))
+        box_cox_power = float(zscores.get("L"))
+        print "BOX-COX: " + str(box_cox_power)
         # M(t)
         median_for_age = float(zscores.get("M"))
+        print "MEDIAN: " + str(median_for_age)
         # S(t)
         coefficient_of_variance_for_age = float(zscores.get("S"))
+        print "COEF VAR: " + str(coefficient_of_variance_for_age)
 
         # S(t)L(t) = StDev(t)
-        stdev_for_age = coefficient_of_variance_for_age * box-cox_power 
+        stdev_for_age = coefficient_of_variance_for_age * box_cox_power 
+        print "STDEV: " + str(stdev_for_age)
+        sd0 = float(zscores.get("SD0"))
+        print "ST0: " + str(sd0)
 
         ###
         #           [y/M(t)]^L(t) - 1
@@ -122,8 +153,17 @@ class util(object):
         #               S(t)L(t)
         ###
 
-        zscore = ((((y / median_for_age)**box-cox_power) - float(1) ) /\
+        zscore = ((((y / median_for_age)**box_cox_power) - float(1) ) /\
                         stdev_for_age)
+
+        # somethings funky with the wfh and wfl z scores .. trying to debug
+        zscore2 = ((((y / median_for_age)**box_cox_power) - float(1) ) /\
+                        sd0)
+        alt = (y - median_for_age) / sd0
+        print "Z: " + str(zscore)
+        print "Z2: " + str(zscore2)
+        print "Zalt: " + str(alt)
+        #zscore =zscore2 
 
         if indicator not in ["wfl", "wfh", "wfa"]:
             # return length/height-for-age (lhfa) without further processing
@@ -159,29 +199,59 @@ class util(object):
             #           |          SD23neg
             #           |
             #           |_
+            def calc_stdev(sd):
+                ### e.g.,
+                #
+                #   SD3neg = M(t)[1 + L(t) * S(t) * (-3)]^ 1/L(t)
+                #   SD2pos = M(t)[1 + L(t) * S(t) * (2)]^ 1/L(t)
+                #
+                ###
+                stdev = median_for_age*(float(1) + box_cox_power *\
+                    coefficient_of_variance_for_age * float(sd))**\
+                    (float(1)/box_cox_power)
+                return stdev
+                
             if (zscore > float(3)):
+                print "Z greater than 3"
+                # TODO measure performance of lookup vs calculation
+                # calculate for now so we have greater precision
+
                 # get cutoffs from zscores dict
-                SD2pos = float(zscores.get("SD2"))
-                SD3pos = float(zscores.get("SD3"))
+                #SD2pos = float(zscores.get("SD2"))
+                #SD3pos = float(zscores.get("SD3"))
+
+                # calculate SD
+                SD2pos_c = calc_stdev(2)
+                SD3pos_c = calc_stdev(3) 
+
                 # compute distance
-                SD23pos = SD3pos - SD2pos
+                #SD23pos = SD3pos - SD2pos
+                SD23pos_c = SD3pos_c - SD2pos_c
 
                 # compute final z-score
-                zscore = float(3) + ((y - SD3pos)/SD23pos)
+                zscore = float(3) + ((y - SD3pos_c)/SD23pos_c)
                 return zscore
 
             if (zscore < float(-3)):
+                print "Z less than 3"
                 # get cutoffs from zscores dict
-                SD2neg = float(zscores.get("SD2neg"))
-                SD3neg = float(zscores.get("SD3neg"))
+                #SD2neg = float(zscores.get("SD2neg"))
+                #SD3neg = float(zscores.get("SD3neg"))
+
+                # calculate SD
+                SD2neg_c = calc_stdev(-2)
+                SD3neg_c = calc_stdev(-3) 
+
                 # compute distance
-                SD23neg = SD2neg - SD3neg
+                #SD23neg = SD2neg - SD3neg
+                SD23neg_c = SD2neg_c - SD3neg_c
 
                 # compute final z-score
-                zscore = float(-3) + ((y - SD3neg)/SD23neg)
+                zscore = float(-3) + ((y - SD3neg_c)/SD23neg_c)
                 return zscore
         
 
+class util(object):
     @staticmethod   
     def get_good_date(date):
         delimiters = r"[./\\-]+"

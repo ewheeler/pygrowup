@@ -25,8 +25,7 @@ class childgrowth(object):
         WHO_tables = [
             'wfl_boys_0_2_zscores.json',  'wfl_girls_0_2_zscores.json',\
             'wfh_boys_2_5_zscores.json',  'wfh_girls_2_5_zscores.json',\
-            'lhfa_boys_0_2_zscores.json', 'lhfa_girls_0_2_zscores.json',\
-            'lhfa_boys_2_5_zscores.json', 'lhfa_girls_2_5_zscores.json',\
+            'lhfa_boys_0_5_zscores.json', 'lhfa_girls_0_5_zscores.json',\
             'wfa_boys_0_5_zscores.json',  'wfa_girls_0_5_zscores.json']
 
         for table in WHO_tables:
@@ -41,24 +40,31 @@ class childgrowth(object):
                 setattr(self, table_name, json.load(f))
 
     def _get_zscores_by_month(self, table_name, month):
+        #print "getting scores by month: " + str(month)
         table = getattr(self, table_name)
         for scores in table:
             m = scores.get("Month")
-            if int(m) is month:
-                return scores
+            if m is not None:
+                if int(m) == int(month):
+                    #print scores
+                    return scores
+        print "SCORES NOT FOUND BY MONTH"
 
     def _get_zscores_by_height(self, table_name, height):
+        #print "getting scores by height: " + str(height)
         table = getattr(self, table_name)
         # from the windoooows ... to the WALLS
-        lower_bound = math.floor(height)
-        upper_bound = math.ceil(height)
-        # TODO interpolate
+        #lower_bound = math.floor(height)
+        #upper_bound = math.ceil(height)
+        # TODO interpolate?
         for scores in table:
             m = scores.get("Height")
             # not int or float here!
-            if m == str(height):
-                print scores
+            # e.g., expecting 60 or 60.5
+            if m == str(util._dumb_round(float(height))):
+                #print scores
                 return scores
+        print "SCORES NOT FOUND BY HEIGHT"
 
     @staticmethod
     def _add_gender_to_string(table_name, gender):
@@ -79,9 +85,55 @@ class childgrowth(object):
             table_name = table_name + '2_5'
         return table_name
 
+    def test_zscores(self):
+        import csv
+        import codecs
+        csvee = codecs.open("apps/childhealth/test.csv", "rU", encoding='utf-8', errors='ignore')
+
+        # sniffer attempts to guess the file's dialect e.g., excel, etc
+        #dialect = csv.Sniffer().sniff(csvee.read(1024))
+        #csvee.seek(0)
+        # DictReader uses first row of csv as key for data in corresponding column
+        reader = csv.DictReader(csvee, dialect="excel")
+        for row in reader:
+            for indicator in ["lhfa", "wfl", "wfh", "wfa"]:
+                if row["GENDER"] == "1":
+                    gender = "M"
+                elif row["GENDER"] == "2":
+                    gender = "F"
+                else:
+                    gender = None
+                if indicator == "lhfa":
+                    their_result = row["_ZLEN"]
+                    measurement = row["HEIGHT"]
+                    height = None
+                if indicator in ["wfl", "wfh"]:
+                    their_result = row["_ZWFL"]
+                    measurement = row["WEIGHT"]
+                    height = row["HEIGHT"]
+                if indicator == "wfa":
+                    their_result = row["_ZWEI"]
+                    measurement = row["WEIGHT"]
+                    height = None
+                age = int(float(row["agemons"]))
+                try:
+                    our_result = self.zscore_for_measurement(indicator, measurement,\
+                        age, gender, height)
+                    print "-----------------------"
+                    print indicator.upper() + " " + gender + " " + str(age)
+                    print "THEM: " + str(their_result)
+                    print "US  : " + str(our_result)
+                except Exception, e:
+                    print "-----------------------"
+                    print indicator.upper() + " " + gender
+                    print "OOPS: " + str(e)
+                
+
+        
     def zscore_for_measurement(self, indicator, measurement, age_in_months, gender, height=None):
         assert gender in ["M", "F"]
         assert indicator in ["lhfa", "wfl", "wfh", "wfa"] 
+        debug = False
 
         # initial table string
         table_name = indicator + '_'
@@ -90,7 +142,7 @@ class childgrowth(object):
 
         # check age and update table_name string
         t = age_in_months
-        if indicator == "wfa":
+        if indicator in ["wfa", "lhfa"]:
             # weight for age has only one table per gender
             table_name = table_name + "0_5"
         else:
@@ -103,9 +155,12 @@ class childgrowth(object):
         else:
             zscores = self._get_zscores_by_month(table_name, t)
 
+        if zscores is None:
+            return None
+
         # this is our length or height or weight measurement
         y = float(measurement)
-        print "MEASUREMENT: " + str(y)
+        if debug: print "MEASUREMENT: " + str(y)
 
         # indicator-specific methodology
         # (see section 5.1 of http://www.who.int/entity/childgrowth/standards/\
@@ -118,34 +173,31 @@ class childgrowth(object):
             # subtract 0.7cm from length measurements in this range
             # to adjust for child's reclined position 
             if (float(65.7) < y < float(120.7)):
-                print "subtracting 0.7 from length"
-                print str(y)
-                y = y - float(0.7)
-                print str(y)
+                if debug: print "subtracting 0.7 from length"
+                if debug: print str(y)
+                #y = y - float(0.7)
+                if debug: print str(y)
         if indicator == "wfh":
             # add 0.7cm to all height measurements
             # (basically to convert all height measurments to lengths)
-            print "adding 0.7 to height"
-            print str(y)
-            y = y + float(0.7)
-            print str(y)
+            if debug: print "adding 0.7 to height"
+            if debug: print str(y)
+            #y = y + float(0.7)
+            if debug: print str(y)
 
         # fetch necessary scores from zscores dict and cast as floats
         # L(t)
         box_cox_power = float(zscores.get("L"))
-        print "BOX-COX: " + str(box_cox_power)
+        if debug: print "BOX-COX: " + str(box_cox_power)
         # M(t)
         median_for_age = float(zscores.get("M"))
-        print "MEDIAN: " + str(median_for_age)
+        if debug: print "MEDIAN: " + str(median_for_age)
         # S(t)
         coefficient_of_variance_for_age = float(zscores.get("S"))
-        print "COEF VAR: " + str(coefficient_of_variance_for_age)
+        if debug: print "COEF VAR: " + str(coefficient_of_variance_for_age)
 
-        # S(t)L(t) = StDev(t)
-        stdev_for_age = coefficient_of_variance_for_age * box_cox_power 
-        print "STDEV: " + str(stdev_for_age)
         sd0 = float(zscores.get("SD0"))
-        print "ST0: " + str(sd0)
+        if debug: print "ST0: " + str(sd0)
 
         ###
         #           [y/M(t)]^L(t) - 1
@@ -154,15 +206,18 @@ class childgrowth(object):
         ###
 
         zscore = ((((y / median_for_age)**box_cox_power) - float(1) ) /\
-                        stdev_for_age)
+                        (coefficient_of_variance_for_age * box_cox_power))
 
         # somethings funky with the wfh and wfl z scores .. trying to debug
         zscore2 = ((((y / median_for_age)**box_cox_power) - float(1) ) /\
                         sd0)
-        alt = (y - median_for_age) / sd0
-        print "Z: " + str(zscore)
-        print "Z2: " + str(zscore2)
-        print "Zalt: " + str(alt)
+        alt = (y - median_for_age) / (median_for_age *\
+            coefficient_of_variance_for_age)
+        #if indicator == "lhfa":
+        #    zscore = alt
+        if debug: print "Z: " + str(zscore)
+        if debug: print "Z2: " + str(zscore2)
+        if debug: print "Zalt: " + str(alt)
         #zscore =zscore2 
 
         if indicator not in ["wfl", "wfh", "wfa"]:

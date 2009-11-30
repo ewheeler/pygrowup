@@ -6,6 +6,9 @@ import os
 import re
 import datetime
 import math
+import decimal
+from decimal import Decimal as D
+
 try:
     # NOTE Python 2.5 requires installation of simplejson library
     # http://pypi.python.org/pypi/simplejson
@@ -19,6 +22,7 @@ from tables import weight_for_height as weight_for_height_table
 
 class childgrowth(object):
     def __init__(self):
+        self.context = decimal.getcontext()
         # load WHO Growth Standards
         # http://www.who.int/childgrowth/standards/en/
 
@@ -42,50 +46,75 @@ class childgrowth(object):
     def _get_zscores_by_month(self, table_name, month):
         #print "getting scores by month: " + str(month)
         table = getattr(self, table_name)
+        # TODO interpolate
+        closest_month = int(round(month))
         for scores in table:
             m = scores.get("Month")
-            if m is not None:
-                if int(m) == int(month):
-                    #print scores
-                    return scores
-        print "SCORES NOT FOUND BY MONTH"
+            if m == str(closest_month):
+                #print scores
+                return scores
+        print "SCORES NOT FOUND BY MONTH: " + str(month)
 
     def _get_zscores_by_height(self, table_name, height):
         #print "getting scores by height: " + str(height)
         table = getattr(self, table_name)
-        # from the windoooows ... to the WALLS
-        #lower_bound = math.floor(height)
-        #upper_bound = math.ceil(height)
-        # TODO interpolate?
+        # TODO be more clever
+        if table_name[2] == 'l':
+            field_name = 'Length'
+        elif table_name[2] == 'h':
+            field_name = 'Height'
+        else:
+            print 'NOT L OR H????????????????'
+        # find closest height from WHO table (which has data at a resolution
+        # of half a centimeter). 
+        # round height to closest tenth of a centimeter
+        # NOTE months in table are not ints or floats
+        # (e.g., 60, 60.5)
+        # TODO decimal in Python 2.6 has a ROUND_05UP setting...
+        rounded_to_tenth = str(D(height).quantize(D('.1')))
+        tenth = int(rounded_to_tenth[-1])
+        # use the closest half centimeter
+        if tenth in [0,1,2,8,9]:
+            # remove decimal point too!
+            closest_height = rounded_to_tenth[:-2]
+        elif tenth in [3,4,6,7]:    
+            closest_height = rounded_to_tenth[:-1] + "5"
+        else:
+            # this should only be hit by heights ending in .5
+            closest_height = rounded_to_tenth
+
         for scores in table:
-            m = scores.get("Height")
-            # not int or float here!
-            # e.g., expecting 60 or 60.5
-            if m == str(util._dumb_round(float(height))):
-                #print scores
-                return scores
-        print "SCORES NOT FOUND BY HEIGHT"
+            h = scores.get(field_name)
+            if h is not None:
+                if h == closest_height:
+                    #print scores
+                    return scores
+        print "SCORES NOT FOUND BY HEIGHT: " + str(height) + " -> " + closest_height
 
     @staticmethod
     def _add_gender_to_string(table_name, gender):
         if gender == "M":
-            table_name = table_name + 'boys_'
-            return table_name
+            new_table_name = table_name + 'boys_'
+            return new_table_name
         elif gender == "F":
-            table_name = table_name + 'girls_'
-            return table_name
+            new_table_name = table_name + 'girls_'
+            return new_table_name
         else:
             raise 
 
     @staticmethod
     def _add_age_range_to_string(table_name, age_in_months):
-        if age_in_months < 24:
-            table_name = table_name + '0_2'
-        if age_in_months  >= 24:
-            table_name = table_name + '2_5'
-        return table_name
+        if int(age_in_months) < int(24):
+            new_table_name = table_name + '0_2'
+            return new_table_name
+        elif int(age_in_months)  >= int(24):
+            new_table_name = table_name + '2_5'
+            return new_table_name
+        else:
+            raise
 
     def test_zscores(self):
+        # TODO make this less embarassing..
         import csv
         import codecs
         csvee = codecs.open("apps/childhealth/test.csv", "rU", encoding='utf-8', errors='ignore')
@@ -95,7 +124,12 @@ class childgrowth(object):
         #csvee.seek(0)
         # DictReader uses first row of csv as key for data in corresponding column
         reader = csv.DictReader(csvee, dialect="excel")
+        self.diffs_one = []
+        self.diffs_half = []
+        self.errors = []
+        rows = 0
         for row in reader:
+            rows += 1
             for indicator in ["lhfa", "wfl", "wfh", "wfa"]:
                 if row["GENDER"] == "1":
                     gender = "M"
@@ -115,51 +149,136 @@ class childgrowth(object):
                     their_result = row["_ZWEI"]
                     measurement = row["WEIGHT"]
                     height = None
-                age = int(float(row["agemons"]))
+                age = row["agemons"]
+
                 try:
+                    our_result = None
+                    diff = None
+                    print "-----------------------"
+                    print indicator.upper() + " " + gender + " " + str(age) + " " + str(height)
                     our_result = self.zscore_for_measurement(indicator, measurement,\
                         age, gender, height)
-                    print "-----------------------"
-                    print indicator.upper() + " " + gender + " " + str(age)
                     print "THEM: " + str(their_result)
-                    print "US  : " + str(our_result)
-                except Exception, e:
-                    print "-----------------------"
-                    print indicator.upper() + " " + gender
-                    print "OOPS: " + str(e)
+                    if our_result is not None:
+                        print "US  : " + str(our_result)
+                        diff = self.context.subtract(D(their_result), D(our_result))
+                        #print " "
+                        #print " "
+                        if abs(diff) >= D(1):
+                            self.diffs_one.append({'ind': indicator, 'gender': gender, 'age': age, 'us':our_result, 'them':their_result, 'diff':diff})
+                            print "                                                          DIFF: " + str(diff) 
+                        if abs(diff) >= D('0.5') and abs(diff) < D(1):
+                            self.diffs_half.append({'ind': indicator, 'gender': gender, 'age': age, 'us':our_result, 'them':their_result, 'diff':diff})
+                except AttributeError:
+                    pass
+                except Exception,e:
+                    print "OOPS:                                                             " + str(e)
+                    if their_result != "":
+                        self.errors.append({'ind': indicator, 'gender': gender, 'age': age, 'us':our_result, 'them':their_result, 'diff':diff, 'e': e})
+
+        print "__________________________________"
+        print "TOTAL: " + str(rows)
+
+        print "DIFFS OVER ONE: " + str(len(self.diffs_one))
+        wfa = 0
+        lhfa = 0
+        wfl = 0
+        wfh = 0
+        wtf = 0
+        for d in self.diffs_one:
+            print d
+            ind = d['ind']
+            if ind == 'wfa':
+                wfa += 1
+            elif ind == 'lhfa':
+                lhfa += 1
+            elif ind == 'wfl':
+                wfl += 1
+            elif ind == 'wfh':
+                wfh += 1
+            else:
+                wtf += 1
+        print 'wfa: ' + str(wfa)
+        print 'lhfa: ' + str(lhfa)
+        print 'wfl: ' + str(wfl)
+        print 'wfh: ' + str(wfh)
+        print 'wtf: ' + str(wtf)
+
+        print " "
+        print "DIFFS OVER HALF: " + str(len(self.diffs_half))
+        wfa = 0
+        lhfa = 0
+        wfl = 0
+        wfh = 0
+        wtf = 0
+        for d in self.diffs_half:
+            print d
+            ind = d['ind']
+            if ind == 'wfa':
+                wfa += 1
+            elif ind == 'lhfa':
+                lhfa += 1
+            elif ind == 'wfl':
+                wfl += 1
+            elif ind == 'wfh':
+                wfh += 1
+            else:
+                wtf += 1
+        print 'wfa: ' + str(wfa)
+        print 'lhfa: ' + str(lhfa)
+        print 'wfl: ' + str(wfl)
+        print 'wfh: ' + str(wfh)
+        print 'wtf: ' + str(wtf)
+
+        print " "
+        print "ERRORS: " + str(len(self.errors))
+        wfa = 0
+        lhfa = 0
+        wfl = 0
+        wfh = 0
+        wtf = 0
+        for d in self.errors:
+            print d
+            ind = d['ind']
+            if ind == 'wfa':
+                wfa += 1
+            elif ind == 'lhfa':
+                lhfa += 1
+            elif ind == 'wfl':
+                wfl += 1
+            elif ind == 'wfh':
+                wfh += 1
+            else:
+                wtf += 1
+        print 'wfa: ' + str(wfa)
+        print 'lhfa: ' + str(lhfa)
+        print 'wfl: ' + str(wfl)
+        print 'wfh: ' + str(wfh)
+        print 'wtf: ' + str(wtf)
                 
 
         
     def zscore_for_measurement(self, indicator, measurement, age_in_months, gender, height=None):
-        assert gender in ["M", "F"]
-        assert indicator in ["lhfa", "wfl", "wfh", "wfa"] 
+        assert gender.upper() in ["M", "F"]
+        assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa"] 
         debug = False
 
         # initial table string
-        table_name = indicator + '_'
+        table_name = indicator.lower() + '_'
         # check gender and update table_name string
         table_name = self._add_gender_to_string(table_name, gender)
 
         # check age and update table_name string
-        t = age_in_months
-        if indicator in ["wfa", "lhfa"]:
+        t = D(age_in_months)
+        if indicator.lower() in ["wfa", "lhfa"]:
             # weight for age has only one table per gender
             table_name = table_name + "0_5"
         else:
             # all other tables come as a pair: 0-2 and 2-5
-            table_name = self._add_age_range_to_string(table_name, int(t))
-
-        # get zscore from appropriate table
-        if indicator == "wfh" and height is not None:
-            zscores = self._get_zscores_by_height(table_name, height)
-        else:
-            zscores = self._get_zscores_by_month(table_name, t)
-
-        if zscores is None:
-            return None
+            table_name = self._add_age_range_to_string(table_name, t)
 
         # this is our length or height or weight measurement
-        y = float(measurement)
+        y = D(measurement)
         if debug: print "MEASUREMENT: " + str(y)
 
         # indicator-specific methodology
@@ -172,31 +291,52 @@ class childgrowth(object):
         if indicator == "wfl":
             # subtract 0.7cm from length measurements in this range
             # to adjust for child's reclined position 
-            if (float(65.7) < y < float(120.7)):
+            if (D('65.7') < y < D('120.7')):
                 if debug: print "subtracting 0.7 from length"
                 if debug: print str(y)
-                #y = y - float(0.7)
+                y = y - D('0.7')
                 if debug: print str(y)
+
         if indicator == "wfh":
             # add 0.7cm to all height measurements
             # (basically to convert all height measurments to lengths)
             if debug: print "adding 0.7 to height"
             if debug: print str(y)
-            #y = y + float(0.7)
+            #y = y + D('0.7')
             if debug: print str(y)
+
+        # get zscore from appropriate table
+        print table_name
+        if indicator.lower() in ["wfh", "wfl"]:
+            if height is not None:
+                zscores = self._get_zscores_by_height(table_name, height)
+            else:
+                print "NO LENGTH OR HEIGHT"
+        if indicator.lower() in ["lhfa", "wfa"]:
+            if t is not None:
+                if t <= D(60):
+                    zscores = self._get_zscores_by_month(table_name, t)
+                else:
+                    return 'TOO OLD'
+            else:
+                print "NO AGE"
+
+        if zscores is None:
+            return "NO SCORES????????????????"
+
 
         # fetch necessary scores from zscores dict and cast as floats
         # L(t)
-        box_cox_power = float(zscores.get("L"))
+        box_cox_power = D(zscores.get("L"))
         if debug: print "BOX-COX: " + str(box_cox_power)
         # M(t)
-        median_for_age = float(zscores.get("M"))
+        median_for_age = D(zscores.get("M"))
         if debug: print "MEDIAN: " + str(median_for_age)
         # S(t)
-        coefficient_of_variance_for_age = float(zscores.get("S"))
+        coefficient_of_variance_for_age = D(zscores.get("S"))
         if debug: print "COEF VAR: " + str(coefficient_of_variance_for_age)
 
-        sd0 = float(zscores.get("SD0"))
+        sd0 = D(zscores.get("SD0"))
         if debug: print "ST0: " + str(sd0)
 
         ###
@@ -205,16 +345,32 @@ class childgrowth(object):
         #               S(t)L(t)
         ###
 
-        zscore = ((((y / median_for_age)**box_cox_power) - float(1) ) /\
-                        (coefficient_of_variance_for_age * box_cox_power))
+        #zscore = ((((y / median_for_age)**box_cox_power) - D(1) ) /\
+        #                (coefficient_of_variance_for_age * box_cox_power))
+
+        if debug: print("z")
+        power = math.pow(self.context.divide(y, median_for_age), box_cox_power)
+        if debug: print('p')
+        numerator  = D(str(power)) -  D(1)
+        if debug: print('n')
+        denomenator = self.context.multiply(coefficient_of_variance_for_age,\
+                                                box_cox_power)
+        if debug: print('d')
+        zscore = self.context.divide(numerator, denomenator)
+        if debug: print("Z")
 
         # somethings funky with the wfh and wfl z scores .. trying to debug
-        zscore2 = ((((y / median_for_age)**box_cox_power) - float(1) ) /\
-                        sd0)
-        alt = (y - median_for_age) / (median_for_age *\
-            coefficient_of_variance_for_age)
-        #if indicator == "lhfa":
-        #    zscore = alt
+        #zscore2 = ((((y / median_for_age)**box_cox_power) - D(1) ) /\
+        #                sd0)
+        #alt = (y - median_for_age) / (median_for_age *\
+        #    coefficient_of_variance_for_age)
+        if indicator == "lhfa":
+            numerator_lhfa = self.context.subtract(D(y), median_for_age)
+            denomenator_lhfa = self.context.multiply(median_for_age,\
+                coefficient_of_variance_for_age)
+            zscore_lhfa = self.context.divide(numerator_lhfa, denomenator_lhfa)
+            zscore = zscore_lhfa
+
         if debug: print "Z: " + str(zscore)
         if debug: print "Z2: " + str(zscore2)
         if debug: print "Zalt: " + str(alt)
@@ -226,7 +382,7 @@ class childgrowth(object):
             # adjacent SDs (e.g., 2 SD and 3 SD) are constant for a specific
             # age but varied at different ages
             return zscore
-        elif (abs(zscore) <= float(3)):
+        elif (abs(zscore) <= D(3)):
             # (see below comment)
             return zscore
         else:
@@ -261,12 +417,21 @@ class childgrowth(object):
                 #   SD2pos = M(t)[1 + L(t) * S(t) * (2)]^ 1/L(t)
                 #
                 ###
-                stdev = median_for_age*(float(1) + box_cox_power *\
-                    coefficient_of_variance_for_age * float(sd))**\
-                    (float(1)/box_cox_power)
-                return stdev
+                #stdev = median_for_age*(D(1) + box_cox_power *\
+                #    coefficient_of_variance_for_age * D(sd))**\
+                #    (D(1)/box_cox_power)
+                #return stdev
+
+                base = self.context.add(D(1), self.context.multiply(\
+                    self.context.multiply(box_cox_power,\
+                    coefficient_of_variance_for_age), D(sd)))
+                exponent = self.context.divide(D(1), box_cox_power)
+                pow = math.pow(base, exponent)
+                stdev = self.context.multiply(median_for_age, D(str(pow)))
+                print 'STDEV'
+                return D(stdev)
                 
-            if (zscore > float(3)):
+            if (zscore > D(3)):
                 print "Z greater than 3"
                 # TODO measure performance of lookup vs calculation
                 # calculate for now so we have greater precision
@@ -284,10 +449,13 @@ class childgrowth(object):
                 SD23pos_c = SD3pos_c - SD2pos_c
 
                 # compute final z-score
-                zscore = float(3) + ((y - SD3pos_c)/SD23pos_c)
+                #zscore = D(3) + ((y - SD3pos_c)/SD23pos_c)
+                sub = self.context.subtract(D(y), SD3pos_c)
+                div = self.context.divide(sub, SD23pos_c)
+                zscore = self.context.add(D(3), div) 
                 return zscore
 
-            if (zscore < float(-3)):
+            if (zscore < D(-3)):
                 print "Z less than 3"
                 # get cutoffs from zscores dict
                 #SD2neg = float(zscores.get("SD2neg"))
@@ -302,7 +470,10 @@ class childgrowth(object):
                 SD23neg_c = SD2neg_c - SD3neg_c
 
                 # compute final z-score
-                zscore = float(-3) + ((y - SD3neg_c)/SD23neg_c)
+                #zscore = D(-3) + ((y - SD3neg_c)/SD23neg_c)
+                sub = self.context.subtract(D(y), SD3neg_c)
+                div = self.context.divide(sub, SD23neg_c)
+                zscore = self.context.add(D(-3), div) 
                 return zscore
         
 

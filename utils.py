@@ -21,10 +21,36 @@ from tables import stunting_boys, stunting_girls
 from tables import weight_for_height as weight_for_height_table
 
 class childgrowth(object):
-    def __init__(self):
+    # TODO extract this class into its own library
+    def __init__(self, adjust_height_data = False, adjust_weight_scores = False):
+        # use decimal.Decimal instead of float to avoid unwanted rounding
+        # http://docs.sun.com/source/806-3568/ncg_goldberg.html
+        # TODO set a custom precision
         self.context = decimal.getcontext()
+
+        # height adjustments are part of the WHO specification,
+        # but none of their software seems to implement this.
+        # default is false so values are closer to those produced
+        # by the WHO software
+        self.adjust_height_data = adjust_height_data
+
+        # WHO specs include adjustments to z-scores of weight-based
+        # indicators that are greater than +/- 3 SDs. These adjustments
+        # correct for right skewness and avoid making assumptions about
+        # the distribution of data beyond the limits of the observed values.
+        # However, when calculating z-scores in a live data collection 
+        # situation, z-scores greater than +/- 3 SDs are likely to indicate
+        # data entry or anthropometric measurement errors and should not
+        # be adjusted. Instead, these large z-scores should be used to
+        # identify poor data quality and/or entry errors.
+        # These z-score adjustments are appropriate only when there
+        # is confidence in data quality. 
+        self.adjust_weight_scores = adjust_weight_scores
+
         # load WHO Growth Standards
         # http://www.who.int/childgrowth/standards/en/
+        # WHO tab-separated txt files have been converted to json,
+        # and the seperate lhfa tables (0-2 and 2-5) have been combined
 
         WHO_tables = [
             'wfl_boys_0_2_zscores.json',  'wfl_girls_0_2_zscores.json',\
@@ -44,9 +70,8 @@ class childgrowth(object):
                 setattr(self, table_name, json.load(f))
 
     def _get_zscores_by_month(self, table_name, month):
-        #print "getting scores by month: " + str(month)
         table = getattr(self, table_name)
-        # TODO interpolate
+        # TODO interpolate?
         closest_month = int(round(month))
         for scores in table:
             m = scores.get("Month")
@@ -56,9 +81,8 @@ class childgrowth(object):
         print "SCORES NOT FOUND BY MONTH: " + str(month)
 
     def _get_zscores_by_height(self, table_name, height):
-        #print "getting scores by height: " + str(height)
         table = getattr(self, table_name)
-        # TODO be more clever
+        # TODO be more clever?
         if table_name[2] == 'l':
             field_name = 'Length'
         elif table_name[2] == 'h':
@@ -70,7 +94,7 @@ class childgrowth(object):
         # round height to closest tenth of a centimeter
         # NOTE months in table are not ints or floats
         # (e.g., 60, 60.5)
-        # TODO decimal in Python 2.6 has a ROUND_05UP setting...
+        # TODO interpolate?
         rounded_to_tenth = str(D(height).quantize(D('.1')))
         tenth = int(rounded_to_tenth[-1])
         # use the closest half centimeter
@@ -262,6 +286,8 @@ class childgrowth(object):
         assert gender.upper() in ["M", "F"]
         assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa"] 
         debug = False
+        print indicator + " " + str(measurement) + " " + str(age_in_months)\
+            + " " + str(gender)
 
         # initial table string
         table_name = indicator.lower() + '_'
@@ -292,18 +318,12 @@ class childgrowth(object):
             # subtract 0.7cm from length measurements in this range
             # to adjust for child's reclined position 
             if (D('65.7') < y < D('120.7')):
-                if debug: print "subtracting 0.7 from length"
-                if debug: print str(y)
                 y = y - D('0.7')
-                if debug: print str(y)
 
-        if indicator == "wfh":
+        if indicator == "wfh" and self.adjust_height_data:
             # add 0.7cm to all height measurements
             # (basically to convert all height measurments to lengths)
-            if debug: print "adding 0.7 to height"
-            if debug: print str(y)
-            #y = y + D('0.7')
-            if debug: print str(y)
+            y = y + D('0.7')
 
         # get zscore from appropriate table
         print table_name
@@ -335,158 +355,156 @@ class childgrowth(object):
         # S(t)
         coefficient_of_variance_for_age = D(zscores.get("S"))
         if debug: print "COEF VAR: " + str(coefficient_of_variance_for_age)
-
-        sd0 = D(zscores.get("SD0"))
-        if debug: print "ST0: " + str(sd0)
-
+        
         ###
+        # calculate z-score
+        #
+        # (see Chapter 7 of http://www.who.int/entity/childgrowth/standards/\
+        #                                  technical_report/en/index.html)
+        #
         #           [y/M(t)]^L(t) - 1
         #   Zind =  -----------------
         #               S(t)L(t)
         ###
-
-        #zscore = ((((y / median_for_age)**box_cox_power) - D(1) ) /\
-        #                (coefficient_of_variance_for_age * box_cox_power))
-
-        if debug: print("z")
         power = math.pow(self.context.divide(y, median_for_age), box_cox_power)
-        if debug: print('p')
         numerator  = D(str(power)) -  D(1)
-        if debug: print('n')
         denomenator = self.context.multiply(coefficient_of_variance_for_age,\
                                                 box_cox_power)
-        if debug: print('d')
         zscore = self.context.divide(numerator, denomenator)
-        if debug: print("Z")
 
-        # somethings funky with the wfh and wfl z scores .. trying to debug
-        #zscore2 = ((((y / median_for_age)**box_cox_power) - D(1) ) /\
-        #                sd0)
-        #alt = (y - median_for_age) / (median_for_age *\
-        #    coefficient_of_variance_for_age)
-        if indicator == "lhfa":
-            numerator_lhfa = self.context.subtract(D(y), median_for_age)
-            denomenator_lhfa = self.context.multiply(median_for_age,\
-                coefficient_of_variance_for_age)
-            zscore_lhfa = self.context.divide(numerator_lhfa, denomenator_lhfa)
-            zscore = zscore_lhfa
 
-        if debug: print "Z: " + str(zscore)
-        if debug: print "Z2: " + str(zscore2)
-        if debug: print "Zalt: " + str(alt)
-        #zscore =zscore2 
+        # TODO this is probably unneccesary, as it should work out to be the
+        # same as the above z-score calculation
+        #if indicator == "lhfa":
+        #    numerator_lhfa = self.context.subtract(D(y), median_for_age)
+        #    denomenator_lhfa = self.context.multiply(median_for_age,\
+        #        coefficient_of_variance_for_age)
+        #    zscore_lhfa = self.context.divide(numerator_lhfa, denomenator_lhfa)
+        #    zscore = zscore_lhfa
 
-        if indicator not in ["wfl", "wfh", "wfa"]:
-            # return length/height-for-age (lhfa) without further processing
-            # L(t) is always 1 for this indicator, so differences between
-            # adjacent SDs (e.g., 2 SD and 3 SD) are constant for a specific
-            # age but varied at different ages
-            return zscore
-        elif (abs(zscore) <= D(3)):
-            # (see below comment)
-            return zscore
+        # return z-score unless adjust_weight_scores indicates that 
+        # further processing is desired (see comment in __init__())
+        if not self.adjust_weight_scores:
+            # round to hundreth and return
+            return zscore.quantize(D('.01'))
         else:
-            # weight-based indicators present right-skewed distributions
-            # so use restricted application of LMS method (limiting Box-Cox
-            # normal distribution to interval corresponding to z-scores where
-            # empirical data are available. z-scores beyond +/- 3 SDs are
-            # fixed to the distance between +/- 2 SDs and +/- 3 SD 
-            # this avoids making assumptions about the distribution of data
-            # beyond the limits of observed values
-            #
-            #            _
-            #           |
-            #           |       Zind            if |Zind| <= 3
-            #           |
-            #           |
-            #           |       y - SD3pos
-            #   Zind* = | 3 + ( ----------- )   if Zind > 3
-            #           |         SD23pos
-            #           |
-            #           |
-            #           |
-            #           |        y - SD3neg
-            #           | -3 + ( ----------- )  if Zind < -3
-            #           |          SD23neg
-            #           |
-            #           |_
-            def calc_stdev(sd):
-                ### e.g.,
+            if indicator not in ["wfl", "wfh", "wfa"]:
+                # return length/height-for-age (lhfa) without further processing
+                # L(t) is always 1 for this indicator, so differences between
+                # adjacent SDs (e.g., 2 SD and 3 SD) are constant for a specific
+                # age but varied at different ages
+                return zscore.quantize(D('.01'))
+            elif (abs(zscore) <= D(3)):
+                # (see below comment)
+                return zscore.quantize(D('.01'))
+            else:
+                # weight-based indicators present right-skewed distributions
+                # so use restricted application of LMS method (limiting Box-Cox
+                # normal distribution to interval corresponding to z-scores where
+                # empirical data are available. z-scores beyond +/- 3 SDs are
+                # fixed to the distance between +/- 2 SDs and +/- 3 SD 
+                # this avoids making assumptions about the distribution of data
+                # beyond the limits of observed values
                 #
-                #   SD3neg = M(t)[1 + L(t) * S(t) * (-3)]^ 1/L(t)
-                #   SD2pos = M(t)[1 + L(t) * S(t) * (2)]^ 1/L(t)
-                #
-                ###
-                #stdev = median_for_age*(D(1) + box_cox_power *\
-                #    coefficient_of_variance_for_age * D(sd))**\
-                #    (D(1)/box_cox_power)
-                #return stdev
+                #            _
+                #           |
+                #           |       Zind            if |Zind| <= 3
+                #           |
+                #           |
+                #           |       y - SD3pos
+                #   Zind* = | 3 + ( ----------- )   if Zind > 3
+                #           |         SD23pos
+                #           |
+                #           |
+                #           |
+                #           |        y - SD3neg
+                #           | -3 + ( ----------- )  if Zind < -3
+                #           |          SD23neg
+                #           |
+                #           |_
+                def calc_stdev(sd):
+                    ### e.g.,
+                    #
+                    #   SD3neg = M(t)[1 + L(t) * S(t) * (-3)]^ 1/L(t)
+                    #   SD2pos = M(t)[1 + L(t) * S(t) * (2)]^ 1/L(t)
+                    #
+                    ###
+                    base = self.context.add(D(1), self.context.multiply(\
+                        self.context.multiply(box_cox_power,\
+                        coefficient_of_variance_for_age), D(sd)))
+                    exponent = self.context.divide(D(1), box_cox_power)
+                    pow = math.pow(base, exponent)
+                    stdev = self.context.multiply(median_for_age, D(str(pow)))
+                    return D(stdev)
+                    
+                if (zscore > D(3)):
+                    print "Z greater than 3"
+                    # TODO measure performance of lookup vs calculation
+                    # calculate for now so we have greater precision
 
-                base = self.context.add(D(1), self.context.multiply(\
-                    self.context.multiply(box_cox_power,\
-                    coefficient_of_variance_for_age), D(sd)))
-                exponent = self.context.divide(D(1), box_cox_power)
-                pow = math.pow(base, exponent)
-                stdev = self.context.multiply(median_for_age, D(str(pow)))
-                print 'STDEV'
-                return D(stdev)
-                
-            if (zscore > D(3)):
-                print "Z greater than 3"
-                # TODO measure performance of lookup vs calculation
-                # calculate for now so we have greater precision
+                    # get cutoffs from z-scores dict
+                    #SD2pos = float(zscores.get("SD2"))
+                    #SD3pos = float(zscores.get("SD3"))
 
-                # get cutoffs from zscores dict
-                #SD2pos = float(zscores.get("SD2"))
-                #SD3pos = float(zscores.get("SD3"))
+                    # calculate SD
+                    SD2pos_c = calc_stdev(2)
+                    SD3pos_c = calc_stdev(3) 
 
-                # calculate SD
-                SD2pos_c = calc_stdev(2)
-                SD3pos_c = calc_stdev(3) 
+                    # compute distance
+                    SD23pos_c = SD3pos_c - SD2pos_c
 
-                # compute distance
-                #SD23pos = SD3pos - SD2pos
-                SD23pos_c = SD3pos_c - SD2pos_c
+                    # compute final z-score
+                    #zscore = D(3) + ((y - SD3pos_c)/SD23pos_c)
+                    sub = self.context.subtract(D(y), SD3pos_c)
+                    div = self.context.divide(sub, SD23pos_c)
+                    zscore = self.context.add(D(3), div) 
+                    return zscore.quantize(D('.01'))
 
-                # compute final z-score
-                #zscore = D(3) + ((y - SD3pos_c)/SD23pos_c)
-                sub = self.context.subtract(D(y), SD3pos_c)
-                div = self.context.divide(sub, SD23pos_c)
-                zscore = self.context.add(D(3), div) 
-                return zscore
+                if (zscore < D(-3)):
+                    # get cutoffs from z-scores dict
+                    #SD2neg = float(zscores.get("SD2neg"))
+                    #SD3neg = float(zscores.get("SD3neg"))
 
-            if (zscore < D(-3)):
-                print "Z less than 3"
-                # get cutoffs from zscores dict
-                #SD2neg = float(zscores.get("SD2neg"))
-                #SD3neg = float(zscores.get("SD3neg"))
+                    # calculate SD
+                    SD2neg_c = calc_stdev(-2)
+                    SD3neg_c = calc_stdev(-3) 
 
-                # calculate SD
-                SD2neg_c = calc_stdev(-2)
-                SD3neg_c = calc_stdev(-3) 
+                    # compute distance
+                    SD23neg_c = SD2neg_c - SD3neg_c
 
-                # compute distance
-                #SD23neg = SD2neg - SD3neg
-                SD23neg_c = SD2neg_c - SD3neg_c
+                    # compute final z-score
+                    #zscore = D(-3) + ((y - SD3neg_c)/SD23neg_c)
+                    sub = self.context.subtract(D(y), SD3neg_c)
+                    div = self.context.divide(sub, SD23neg_c)
+                    zscore = self.context.add(D(-3), div) 
+                    return zscore.quantize(D('.01'))
 
-                # compute final z-score
-                #zscore = D(-3) + ((y - SD3neg_c)/SD23neg_c)
-                sub = self.context.subtract(D(y), SD3neg_c)
-                div = self.context.divide(sub, SD23neg_c)
-                zscore = self.context.add(D(-3), div) 
-                return zscore
-        
 
 class util(object):
     @staticmethod   
-    def get_good_date(date):
+    def get_good_date(date, delimiter=False):
         delimiters = r"[./\\-]+"
-        # expecting YYYY-MM-DD, YY-MM-DD, or YY-M-D
-        Allsect=re.split(delimiters,date)            
+        if delimiter:
+            # expecting YYYY-MM-DD, YY-MM-DD, or YY-M-D
+            Allsect=re.split(delimiters,date)            
+        else:
+            if len(date) == 6:
+                # assume YYMMDD
+                Allsect = [date[:2], date[2:4], date[4:]] 
+            if len(date) == 8:
+                # assume YYYYMMDD
+                Allsect = [date[:4], date[4:6], date[6:]]
+            if len(date) == 4:
+                # assume YYMD
+                Allsect = [date[:2], date[2], date[3]]
+            if len(date) == 5:
+                # reject
+                return None
+
         if Allsect is not None:
             year = Allsect[0]
+            month = Allsect[1]
             day = Allsect[2]
-            month = Allsect[1]         
 
             # make sure we have a REAL day
             if month.isdigit():

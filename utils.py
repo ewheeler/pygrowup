@@ -299,6 +299,11 @@ class childgrowth(object):
         if indicator.lower() in ["wfa", "lhfa"]:
             # weight for age has only one table per gender
             table_name = table_name + "0_5"
+        # these two checks shouldnt be necessary, but just in case
+        elif indicator.lower() in ["wfl"]:
+            table_name = table_name + "0_2"
+        elif indicator.lower() in ["wfh"]:
+            table_name = table_name + "2_5"
         else:
             # all other tables come as a pair: 0-2 and 2-5
             table_name = self._add_age_range_to_string(table_name, t)
@@ -485,26 +490,26 @@ class util(object):
     def get_good_date(date, delimiter=False):
         delimiters = r"[./\\-]+"
         if delimiter:
-            # expecting YYYY-MM-DD, YY-MM-DD, or YY-M-D
+            # expecting DDMMYY
             Allsect=re.split(delimiters,date)            
         else:
             if len(date) == 6:
-                # assume YYMMDD
+                # assume DDMMYY
                 Allsect = [date[:2], date[2:4], date[4:]] 
             if len(date) == 8:
-                # assume YYYYMMDD
-                Allsect = [date[:4], date[4:6], date[6:]]
+                # assume DDMMYYYY
+                Allsect = [date[:2], date[2:4], date[4:]]
             if len(date) == 4:
-                # assume YYMD
-                Allsect = [date[:2], date[2], date[3]]
+                # assume MDYY
+                Allsect = [date[0], date[1], date[2:]]
             if len(date) == 5:
                 # reject
                 return None
 
         if Allsect is not None:
-            year = Allsect[0]
+            year = Allsect[2]
             month = Allsect[1]
-            day = Allsect[2]
+            day = Allsect[0]
 
             # make sure we have a REAL day
             if month.isdigit():

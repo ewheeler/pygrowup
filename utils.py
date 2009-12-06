@@ -107,6 +107,7 @@ class childgrowth(object):
             # this should only be hit by heights ending in .5
             closest_height = rounded_to_tenth
 
+        print "looking up scores with: " + closest_height
         for scores in table:
             h = scores.get(field_name)
             if h is not None:

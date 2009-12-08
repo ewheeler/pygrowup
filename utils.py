@@ -489,28 +489,41 @@ class childgrowth(object):
 class util(object):
     @staticmethod   
     def get_good_date(date, delimiter=False):
+        print 'getting good date...'
+        print date
         delimiters = r"[./\\-]+"
         if delimiter:
             # expecting DDMMYY
             Allsect=re.split(delimiters,date)            
         else:
+            print 'no delimiter'
             if len(date) == 6:
                 # assume DDMMYY
                 Allsect = [date[:2], date[2:4], date[4:]] 
-            if len(date) == 8:
+            elif len(date) == 8:
                 # assume DDMMYYYY
                 Allsect = [date[:2], date[2:4], date[4:]]
-            if len(date) == 4:
-                # assume MDYY
+            elif len(date) == 4:
+                # assume DMYY
                 Allsect = [date[0], date[1], date[2:]]
-            if len(date) == 5:
-                # reject
-                return None
+            elif len(date) == 5:
+                # reject ambiguous dates
+                return None, None
+                #if int(date[:2]) > 31 and (0 < int(date[2]) >= 12):
+                #    Allsect = [date[:2], date[2], date[2:]]
+                #if int(date[0]) <= 12 and (0 < int(date[1:3]) <= 31): 
+                #    Allsect = [date[0], date[1:3], date[2:]]
+            else:
+                return None, None
 
         if Allsect is not None:
+            print Allsect
             year = Allsect[2]
             month = Allsect[1]
             day = Allsect[0]
+            print 'year ' + str(year)
+            print 'month ' + str(month)
+            print 'day ' + str(day)
 
             # make sure we have a REAL day
             if month.isdigit():
@@ -521,13 +534,13 @@ class util(object):
                     if int(day) > 30:
                         day = 30
             else:
-                return None
+                return None, None
 
             # if there are letters in the date, give up
             if not year.isdigit():
-                return None
+                return None, None
             if not day.isdigit():
-                return None
+                return None, None
 
             # add leading digits if they are missing
             # TODO can we use datetime.strptime for this?
@@ -538,10 +551,15 @@ class util(object):
             if len(day) < 2:
                 day = "0%s" % day         
 
+            print 'year ' + str(year)
+            print 'month ' + str(month)
+            print 'day ' + str(day)
             # return ISO string for human consumption;
             # datetime.date for django consumption
             good_date_str = "%s-%s-%s" % (year,month,day )
+            print good_date_str
             good_date_obj = datetime.date(int(year), int(month), int(day))
+            print good_date_obj
             return good_date_str, good_date_obj
 
     @staticmethod

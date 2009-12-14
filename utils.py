@@ -351,7 +351,7 @@ class childgrowth(object):
             return "NO SCORES????????????????"
 
 
-        # fetch necessary scores from zscores dict and cast as floats
+        # fetch necessary scores from zscores dict and cast as decimals
         # L(t)
         box_cox_power = D(zscores.get("L"))
         if debug: print "BOX-COX: " + str(box_cox_power)
@@ -449,8 +449,8 @@ class childgrowth(object):
                     # calculate for now so we have greater precision
 
                     # get cutoffs from z-scores dict
-                    #SD2pos = float(zscores.get("SD2"))
-                    #SD3pos = float(zscores.get("SD3"))
+                    #SD2pos = D(zscores.get("SD2"))
+                    #SD3pos = D(zscores.get("SD3"))
 
                     # calculate SD
                     SD2pos_c = calc_stdev(2)
@@ -468,8 +468,8 @@ class childgrowth(object):
 
                 if (zscore < D(-3)):
                     # get cutoffs from z-scores dict
-                    #SD2neg = float(zscores.get("SD2neg"))
-                    #SD3neg = float(zscores.get("SD3neg"))
+                    #SD2neg = D(zscores.get("SD2neg"))
+                    #SD3neg = D(zscores.get("SD3neg"))
 
                     # calculate SD
                     SD2neg_c = calc_stdev(-2)

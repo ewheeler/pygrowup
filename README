@@ -1,0 +1,71 @@
+pygrowup calculates z-scores for the following anthropometric indicators:
+    weight-for-age, length/height-for-age, and weight-for-length/height
+based on the WHO Child Growth Standards:
+    http://www.who.int/childgrowth/standards/en/
+    http://www.who.int/entity/childgrowth/standards/technical_report/en/index.html
+
+pygrowup avoids floating-point operations to eliminate the unwanted rounding
+that muddles the precision of some of the igrowup implementations:
+    http://docs.sun.com/source/806-3568/ncg_goldberg.html
+
+REQUIREMENTS:
+Python 2.5 or later
+Additionally, Python 2.5 requires installation of simplejson library:
+    http://pypi.python.org/pypi/simplejson
+
+INSTALLATION:
+copy pygrowup folder into your Python site-packages
+
+EXAMPLE USAGE:
+from pygrowup import pygrowup
+
+# Height adjustments are part of the WHO specification (see section 5.1)
+# to correct for recumbent vs standing measurements,
+# but none of the existing software seems to implement this.
+# default is false so values are closer to those produced
+# by igrowup software
+#
+# WHO specs include adjustments (see Chapter 7) to z-scores of weight-based
+# indicators that are greater than +/- 3 SDs. These adjustments
+# correct for right skewness and avoid making assumptions about
+# the distribution of data beyond the limits of the observed values.
+#
+# However, when calculating z-scores in a live data collection 
+# situation, z-scores greater than +/- 3 SDs are likely to indicate
+# data entry or anthropometric measurement errors and should not
+# be adjusted. Instead, these large z-scores should be used to
+# identify poor data quality and/or entry errors.
+# These z-score adjustments are appropriate only when there
+# is confidence in data quality. 
+cg = childgrowth(adjust_height_data=False, adjust_weight_scores=False)
+
+my_child = {'date_of_birth' : '100309', 'sex' : 'male',\
+            'weight' : '8.0', 'height' : '69.5'}
+
+# use helper functions for formatting data
+
+# transform '100309' into '2009-03-10'
+valid_date = cg.helpers.get_good_date(my_child['date_of_birth'])
+
+# transform 'male' into 'M'
+valid_gender = cg.helpers.get_good_sex('male')
+
+# calculate 9 months from '2009-03-10'
+valid_age = cg.helpers.date_to_age_in_months(valid_date)
+
+
+# call zscore_for_measurement(indicator, measurement,\
+#    age_in_months, gender, height)
+# optional height parameter is only necessary for weight-for-height
+
+# calculate length/height-for-age zscore
+lhfa_zscore_for_my_child = cg.zscore_for_measurement('lhfa',\
+    mychild['height'], valid_age, valid_gender)
+
+# calculate weight-for-age zscore
+wfa_zscore_for_my_child = cg.zscore_for_measurement('wfa',\
+    mychild['weight'], valid_age, valid_gender)
+
+# calculate weight-for-length zscore
+wfl_zscore_for_my_child = cg.zscore_for_measurement('wfl',\
+    mychild['weight'], valid_age, valid_gender, mychild['height'])

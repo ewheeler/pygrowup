@@ -17,18 +17,18 @@ except ImportError:
     # Python 2.6 includes json library
     import json
 
-class ChildGrowth(object):
-    # TODO extract this class into its own library
+class childgrowth(object):
     def __init__(self, adjust_height_data = False, adjust_weight_scores = False):
         # use decimal.Decimal instead of float to avoid unwanted rounding
         # http://docs.sun.com/source/806-3568/ncg_goldberg.html
         # TODO set a custom precision
         self.context = decimal.getcontext()
 
-        # height adjustments are part of the WHO specification,
-        # but none of their software seems to implement this.
+        # Height adjustments are part of the WHO specification
+        # (to correct for recumbent vs standing measurements),
+        # but none of the existing software seems to implement this.
         # default is false so values are closer to those produced
-        # by the WHO software
+        # by igrowup software
         self.adjust_height_data = adjust_height_data
 
         # WHO specs include adjustments to z-scores of weight-based
@@ -139,6 +139,7 @@ class ChildGrowth(object):
         # TODO make this less embarassing..
         import csv
         import codecs
+        # TODO OS agnostic
         csvee = codecs.open("apps/childhealth/test.csv", "rU", encoding='utf-8', errors='ignore')
 
         # sniffer attempts to guess the file's dialect e.g., excel, etc
@@ -577,7 +578,7 @@ class helpers(object):
             return None
 
     @staticmethod
-    def sloppy_date_to_age_in_months(date):
+    def date_to_age_in_months(date):
         delta = datetime.date.today() - date
         #years = delta.days / 365.25
         return str(int(delta.days/30.4375))

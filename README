@@ -37,7 +37,7 @@ from pygrowup import pygrowup
 # identify poor data quality and/or entry errors.
 # These z-score adjustments are appropriate only when there
 # is confidence in data quality. 
-cg = childgrowth(adjust_height_data=False, adjust_weight_scores=False)
+cg = childgrowth(False, False)
 
 my_child = {'date_of_birth' : '100309', 'sex' : 'male',\
             'weight' : '8.0', 'height' : '69.5'}

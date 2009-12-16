@@ -57,7 +57,7 @@ class childgrowth(object):
 
         for table in WHO_tables:
             # TODO OS agnostic!
-            table_file = 'apps/childhealth/tables/' + table
+            table_file = 'pygrowup/tables/' + table
             with open(table_file, 'r') as f:
                 # drop _zscores.json from table name and use
                 # result as attribute name
@@ -140,7 +140,7 @@ class childgrowth(object):
         import csv
         import codecs
         # TODO OS agnostic
-        csvee = codecs.open("apps/childhealth/test.csv", "rU", encoding='utf-8', errors='ignore')
+        csvee = codecs.open("pygrowup/test.csv", "rU", encoding='utf-8', errors='ignore')
 
         # sniffer attempts to guess the file's dialect e.g., excel, etc
         #dialect = csv.Sniffer().sniff(csvee.read(1024))

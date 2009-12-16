@@ -17,7 +17,7 @@ INSTALLATION:
 copy pygrowup folder into your Python site-packages
 
 EXAMPLE USAGE:
-from pygrowup import pygrowup
+from pygrowup.pygrowup import * 
 
 # Height adjustments are part of the WHO specification (see section 5.1)
 # to correct for recumbent vs standing measurements,
@@ -37,7 +37,7 @@ from pygrowup import pygrowup
 # identify poor data quality and/or entry errors.
 # These z-score adjustments are appropriate only when there
 # is confidence in data quality. 
-cg = childgrowth(False, False)
+cg = childgrowth(adjust_height_data=False, adjust_weight_scores=False)
 
 my_child = {'date_of_birth' : '100309', 'sex' : 'male',\
             'weight' : '8.0', 'height' : '69.5'}

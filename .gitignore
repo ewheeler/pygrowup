@@ -1,0 +1,17 @@
+__version__.py
+*.pyc
+*.swp
+*~
+local.ini
+core.*
+.project
+.pydevproject
+*.sqlite3
+logs/*
+\#*
+.#*
+*~
+\#*
+*.log*
+# eclipse stuff
+.settings

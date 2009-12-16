@@ -17,6 +17,9 @@ except ImportError:
     # Python 2.6 includes json library
     import json
 
+# TODO is this the best way to get this file's directory?
+module_dir = os.path.split(os.path.abspath(__file__))[0]
+
 class childgrowth(object):
     def __init__(self, adjust_height_data = False, adjust_weight_scores = False):
         # use decimal.Decimal instead of float to avoid unwanted rounding
@@ -55,9 +58,10 @@ class childgrowth(object):
             'lhfa_boys_0_5_zscores.json', 'lhfa_girls_0_5_zscores.json',\
             'wfa_boys_0_5_zscores.json',  'wfa_girls_0_5_zscores.json']
 
+        # TODO is this the best way to find the tables?
+        table_dir = os.path.join(module_dir, 'tables')
         for table in WHO_tables:
-            # TODO OS agnostic!
-            table_file = 'pygrowup/tables/' + table
+            table_file = os.path.join(table_dir, table)
             with open(table_file, 'r') as f:
                 # drop _zscores.json from table name and use
                 # result as attribute name
@@ -139,8 +143,9 @@ class childgrowth(object):
         # TODO make this less embarassing..
         import csv
         import codecs
-        # TODO OS agnostic
-        csvee = codecs.open("pygrowup/test.csv", "rU", encoding='utf-8', errors='ignore')
+
+        test_file = os.path.join(module_dir, 'test.csv')
+        csvee = codecs.open(test_file, "rU", encoding='utf-8', errors='ignore')
 
         # sniffer attempts to guess the file's dialect e.g., excel, etc
         #dialect = csv.Sniffer().sniff(csvee.read(1024))

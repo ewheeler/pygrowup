@@ -141,15 +141,17 @@ class childgrowth(object):
 
     def test_zscores(self):
         # TODO make this less embarassing..
+        # TODO move this to a separate file
         import csv
         import codecs
 
+        # test file is from WHO's igrowup software
+        # please note that due to the increased precision and accuracy of this
+        # implementation, some digits may be different because WHO's igrowup
+        # software uses error-prone floating-point calculations
         test_file = os.path.join(module_dir, 'test.csv')
         csvee = codecs.open(test_file, "rU", encoding='utf-8', errors='ignore')
 
-        # sniffer attempts to guess the file's dialect e.g., excel, etc
-        #dialect = csv.Sniffer().sniff(csvee.read(1024))
-        #csvee.seek(0)
         # DictReader uses first row of csv as key for data in corresponding column
         reader = csv.DictReader(csvee, dialect="excel")
         self.diffs_one = []

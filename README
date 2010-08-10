@@ -14,7 +14,7 @@ Additionally, Python 2.5 requires installation of simplejson library:
     http://pypi.python.org/pypi/simplejson
 
 INSTALLATION:
-copy pygrowup folder into your Python site-packages
+pip install pygrowup
 
 EXAMPLE USAGE:
 from pygrowup.pygrowup import * 

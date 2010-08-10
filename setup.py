@@ -10,21 +10,8 @@ setup(
     version="0.2",
     license="BSD",
 
-    py_modules = ["pygrowup"],
-
-    data_files=[("tables", ['tables/lhfa_boys_2_5_zscores.json',\
-        'tables/lhfa_girls_2_5_zscores.json',\
-        'tables/wfh_boys_2_5_zscores.json',\
-        'tables/wfl_girls_0_2_zscores.json',\
-        'tables/lhfa_boys_0_2_zscores.json',\
-        'tables/lhfa_girls_0_2_zscores.json',\
-        'tables/wfa_boys_0_5_zscores.json',\
-        'tables/wfh_girls_2_5_zscores.json',\
-        'tables/lhfa_boys_0_5_zscores.json',\
-        'tables/lhfa_girls_0_5_zscores.json',\
-        'tables/wfa_girls_0_5_zscores.json',\
-        'tables/wfl_boys_0_2_zscores.json']),\
-        ("", ['test.csv'])],
+    packages = ['pygrowup', 'pygrowup.tables'],
+    package_data = {'pygrowup': ['tables/*.json']},
 
     author="Evan Wheeler",
     author_email="evanmwheeler@gmail.com",

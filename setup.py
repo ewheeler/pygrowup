@@ -10,8 +10,8 @@ setup(
     version="0.2",
     license="BSD",
 
-    packages = ['pygrowup', 'pygrowup.tables'],
-    package_data = {'pygrowup': ['tables/*.json']},
+    packages = find_packages(),
+    package_data = {'': ['tables/*.json']},
 
     author="Evan Wheeler",
     author_email="evanmwheeler@gmail.com",

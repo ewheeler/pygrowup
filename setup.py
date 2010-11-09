@@ -11,7 +11,7 @@ setup(
     license="BSD",
 
     packages = find_packages(),
-    package_data = {'': ['tables/*.json']},
+    include_package_data = True,
 
     author="Evan Wheeler",
     author_email="evanmwheeler@gmail.com",

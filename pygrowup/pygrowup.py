@@ -21,7 +21,7 @@ except ImportError:
 module_dir = os.path.split(os.path.abspath(__file__))[0]
 
 class childgrowth(object):
-    def __init__(self, adjust_height_data = False, adjust_weight_scores = False):
+    def __init__(self, adjust_height_data = False, adjust_weight_scores = False, american_standards = False):
         # use decimal.Decimal instead of float to avoid unwanted rounding
         # http://docs.sun.com/source/806-3568/ncg_goldberg.html
         # TODO set a custom precision
@@ -46,6 +46,8 @@ class childgrowth(object):
         # These z-score adjustments are appropriate only when there
         # is confidence in data quality. 
         self.adjust_weight_scores = adjust_weight_scores
+        
+        self.american_standards = american_standards
 
         # load WHO Growth Standards
         # http://www.who.int/childgrowth/standards/en/
@@ -57,6 +59,11 @@ class childgrowth(object):
             'wfh_boys_2_5_zscores.json',  'wfh_girls_2_5_zscores.json',\
             'lhfa_boys_0_5_zscores.json', 'lhfa_girls_0_5_zscores.json',\
             'wfa_boys_0_5_zscores.json',  'wfa_girls_0_5_zscores.json']
+		
+        CDC_tables = [
+            'lhfa_boys_2_20_zscores.cdc.json',     'lhfa_girls_2_20_zscores.cdc.json', \
+            'wfa_boys_2_20_zscores.cdc.json',      'wfa_girls_2_20_zscores.cdc.json', \
+            'bmifa_boys_2_20_zscores.cdc.json',    'bmifa_girls_2_20_zscores.cdc.json', ]
 
         # TODO is this the best way to find the tables?
         table_dir = os.path.join(module_dir, 'tables')
@@ -69,6 +76,16 @@ class childgrowth(object):
                 table_name, underscore, zscore_part =\
                     table.split('.')[0].rpartition('_')
                 setattr(self, table_name, json.load(f))
+        if american_standards:
+            for table in CDC_tables:
+	            table_file = os.path.join(table_dir, table)
+	            with open(table_file, 'r') as f:
+	                # drop _zscores.cdc.json from table name and use
+	                # result as attribute name
+	                # (e.g., wfa_boys_0_5_zscores.json => wfa_boys_0_5)
+	                table_name, underscore, zscore_part =\
+	                    table.split('.')[0].rpartition('_')
+	                setattr(self, table_name, json.load(f))
 
     def _get_zscores_by_month(self, table_name, month):
         table = getattr(self, table_name)
@@ -129,15 +146,19 @@ class childgrowth(object):
             raise 
 
     @staticmethod
-    def _add_age_range_to_string(table_name, age_in_months):
-        if int(age_in_months) < int(24):
-            new_table_name = table_name + '0_2'
-            return new_table_name
-        elif int(age_in_months)  >= int(24):
-            new_table_name = table_name + '2_5'
+    def _add_age_range_to_string(table_name, age_in_months, american_standards):
+        if american_standards and age_in_months >= 24:
+            new_table_name = table_name + "2_20"
             return new_table_name
         else:
-            raise
+            if int(age_in_months) < int(24):
+                new_table_name = table_name + '0_2'
+                return new_table_name
+            elif int(age_in_months)  >= int(24):
+                new_table_name = table_name + '2_5'
+                return new_table_name
+            else:
+                raise
 
     def test_zscores(self):
         # TODO make this less embarassing..
@@ -290,10 +311,11 @@ class childgrowth(object):
         
     def zscore_for_measurement(self, indicator, measurement, age_in_months, gender, height=None):
         assert gender.upper() in ["M", "F"]
-        assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa"] 
+        assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa", "bmifa"] 
         debug = False
-        print indicator + " " + str(measurement) + " " + str(age_in_months)\
-            + " " + str(gender)
+        # print indicator + " " + str(measurement) + " " + str(age_in_months)\
+        #     + " " + str(gender)
+        # print self.american_standards
 
         # initial table string
         table_name = indicator.lower() + '_'
@@ -304,7 +326,10 @@ class childgrowth(object):
         t = D(age_in_months)
         if indicator.lower() in ["wfa", "lhfa"]:
             # weight for age has only one table per gender
-            table_name = table_name + "0_5"
+            if self.american_standards and age_in_months >= 24:
+                table_name = table_name + "2_20"
+            else:
+                table_name = table_name + "0_5"
         # these two checks shouldnt be necessary, but just in case
         elif indicator.lower() in ["wfl"]:
             table_name = table_name + "0_2"
@@ -312,7 +337,7 @@ class childgrowth(object):
             table_name = table_name + "2_5"
         else:
             # all other tables come as a pair: 0-2 and 2-5
-            table_name = self._add_age_range_to_string(table_name, t)
+            table_name = self._add_age_range_to_string(table_name, t, self.american_standards)
 
         # this is our length or height or weight measurement
         y = D(measurement)
@@ -337,18 +362,24 @@ class childgrowth(object):
             y = y + D('0.7')
 
         # get zscore from appropriate table
-        print table_name
+        # print table_name
         if indicator.lower() in ["wfh", "wfl"]:
             if height is not None:
                 zscores = self._get_zscores_by_height(table_name, height)
             else:
                 print "NO LENGTH OR HEIGHT"
-        if indicator.lower() in ["lhfa", "wfa"]:
+        if indicator.lower() in ["lhfa", "wfa", "bmifa"]:
             if t is not None:
-                if t <= D(60):
-                    zscores = self._get_zscores_by_month(table_name, t)
+                if self.american_standards:
+                    if t <= D(240):
+                        zscores = self._get_zscores_by_month(table_name, t)
+                    else:
+                        return 'TOO OLD'                    
                 else:
-                    return 'TOO OLD'
+                    if t <= D(60):
+                        zscores = self._get_zscores_by_month(table_name, t)
+                    else:
+                        return 'TOO OLD'
             else:
                 print "NO AGE"
 

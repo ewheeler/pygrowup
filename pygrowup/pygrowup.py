@@ -47,6 +47,7 @@ class childgrowth(object):
         # is confidence in data quality. 
         self.adjust_weight_scores = adjust_weight_scores
         
+        
         self.american_standards = american_standards
 
         # load WHO Growth Standards
@@ -60,6 +61,11 @@ class childgrowth(object):
             'lhfa_boys_0_5_zscores.json', 'lhfa_girls_0_5_zscores.json',\
             'wfa_boys_0_5_zscores.json',  'wfa_girls_0_5_zscores.json']
 		
+        # load CDC growth standards
+        # http://www.cdc.gov/growthcharts/
+        # CDC csv files have been converted to JSON, and the third standard
+        # deviation has been fudged for the purpose of this tool.
+        
         CDC_tables = [
             'lhfa_boys_2_20_zscores.cdc.json',     'lhfa_girls_2_20_zscores.cdc.json', \
             'wfa_boys_2_20_zscores.cdc.json',      'wfa_girls_2_20_zscores.cdc.json', \
@@ -147,6 +153,7 @@ class childgrowth(object):
 
     @staticmethod
     def _add_age_range_to_string(table_name, age_in_months, american_standards):
+        # CDC standards indicate that WHO standards should be used prior to 24 months
         if american_standards and age_in_months >= 24:
             new_table_name = table_name + "2_20"
             return new_table_name
@@ -325,7 +332,7 @@ class childgrowth(object):
         # check age and update table_name string
         t = D(age_in_months)
         if indicator.lower() in ["wfa", "lhfa"]:
-            # weight for age has only one table per gender
+            # weight for age has only one table per gender, and CDC goes unused before 24mos
             if self.american_standards and age_in_months >= 24:
                 table_name = table_name + "2_20"
             else:
@@ -336,7 +343,7 @@ class childgrowth(object):
         elif indicator.lower() in ["wfh"]:
             table_name = table_name + "2_5"
         else:
-            # all other tables come as a pair: 0-2 and 2-5
+            # all other tables come as a pair: 0-2 and 2-5 or 2-20
             table_name = self._add_age_range_to_string(table_name, t, self.american_standards)
 
         # this is our length or height or weight measurement
@@ -371,8 +378,13 @@ class childgrowth(object):
         if indicator.lower() in ["lhfa", "wfa", "bmifa"]:
             if t is not None:
                 if self.american_standards:
+                    # CDC standards are for ages 2-20
                     if t <= D(240):
-                        zscores = self._get_zscores_by_month(table_name, t)
+                        # BMI for Age stats don't exist for 0-2
+                        if indicator.lower() == 'bmifa' and t < D(24):
+                            return 'TOO YOUNG'
+                        else:
+                            zscores = self._get_zscores_by_month(table_name, t)
                     else:
                         return 'TOO OLD'                    
                 else:

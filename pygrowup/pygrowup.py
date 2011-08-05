@@ -60,7 +60,7 @@ class childgrowth(object):
             'wfh_boys_2_5_zscores.json',  'wfh_girls_2_5_zscores.json',\
             'lhfa_boys_0_5_zscores.json', 'lhfa_girls_0_5_zscores.json',\
             'wfa_boys_0_5_zscores.json',  'wfa_girls_0_5_zscores.json']
-		
+
         # load CDC growth standards
         # http://www.cdc.gov/growthcharts/
         # CDC csv files have been converted to JSON, and the third standard
@@ -84,14 +84,14 @@ class childgrowth(object):
                 setattr(self, table_name, json.load(f))
         if american_standards:
             for table in CDC_tables:
-	            table_file = os.path.join(table_dir, table)
-	            with open(table_file, 'r') as f:
-	                # drop _zscores.cdc.json from table name and use
-	                # result as attribute name
-	                # (e.g., wfa_boys_0_5_zscores.json => wfa_boys_0_5)
-	                table_name, underscore, zscore_part =\
-	                    table.split('.')[0].rpartition('_')
-	                setattr(self, table_name, json.load(f))
+                    table_file = os.path.join(table_dir, table)
+                    with open(table_file, 'r') as f:
+                        # drop _zscores.cdc.json from table name and use
+                        # result as attribute name
+                        # (e.g., wfa_boys_0_5_zscores.json => wfa_boys_0_5)
+                        table_name, underscore, zscore_part =\
+                            table.split('.')[0].rpartition('_')
+                        setattr(self, table_name, json.load(f))
 
     def _get_zscores_by_month(self, table_name, month):
         table = getattr(self, table_name)
@@ -125,7 +125,7 @@ class childgrowth(object):
         if tenth in [0,1,2,8,9]:
             # remove decimal point too!
             closest_height = rounded_to_tenth[:-2]
-        elif tenth in [3,4,6,7]:    
+        elif tenth in [3,4,6,7]:
             closest_height = rounded_to_tenth[:-1] + "5"
         else:
             # this should only be hit by heights ending in .5
@@ -318,7 +318,7 @@ class childgrowth(object):
         
     def zscore_for_measurement(self, indicator, measurement, age_in_months, gender, height=None):
         assert gender.upper() in ["M", "F"]
-        assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa", "bmifa"] 
+        assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa", "bmifa"]
         debug = False
         # print indicator + " " + str(measurement) + " " + str(age_in_months)\
         #     + " " + str(gender)
@@ -503,7 +503,7 @@ class childgrowth(object):
 
                     # calculate SD
                     SD2pos_c = calc_stdev(2)
-                    SD3pos_c = calc_stdev(3) 
+                    SD3pos_c = calc_stdev(3)
 
                     # compute distance
                     SD23pos_c = SD3pos_c - SD2pos_c
@@ -512,7 +512,7 @@ class childgrowth(object):
                     #zscore = D(3) + ((y - SD3pos_c)/SD23pos_c)
                     sub = self.context.subtract(D(y), SD3pos_c)
                     div = self.context.divide(sub, SD23pos_c)
-                    zscore = self.context.add(D(3), div) 
+                    zscore = self.context.add(D(3), div)
                     return zscore.quantize(D('.01'))
 
                 if (zscore < D(-3)):
@@ -522,7 +522,7 @@ class childgrowth(object):
 
                     # calculate SD
                     SD2neg_c = calc_stdev(-2)
-                    SD3neg_c = calc_stdev(-3) 
+                    SD3neg_c = calc_stdev(-3)
 
                     # compute distance
                     SD23neg_c = SD2neg_c - SD3neg_c
@@ -531,7 +531,7 @@ class childgrowth(object):
                     #zscore = D(-3) + ((y - SD3neg_c)/SD23neg_c)
                     sub = self.context.subtract(D(y), SD3neg_c)
                     div = self.context.divide(sub, SD23neg_c)
-                    zscore = self.context.add(D(-3), div) 
+                    zscore = self.context.add(D(-3), div)
                     return zscore.quantize(D('.01'))
 
 
@@ -545,12 +545,12 @@ class helpers(object):
         delimiters = r"[./\\-]+"
         if delimiter:
             # expecting DDMMYY
-            Allsect=re.split(delimiters,date)            
+            Allsect=re.split(delimiters,date)
         else:
             print 'no delimiter'
             if len(date) == 6:
                 # assume DDMMYY
-                Allsect = [date[:2], date[2:4], date[4:]] 
+                Allsect = [date[:2], date[2:4], date[4:]]
             elif len(date) == 8:
                 # assume DDMMYYYY
                 Allsect = [date[:2], date[2:4], date[4:]]
@@ -595,12 +595,12 @@ class helpers(object):
 
             # add leading digits if they are missing
             # TODO can we use datetime.strptime for this?
-            if len(year) < 4 : 
-                year = "20%s" % year        
+            if len(year) < 4 :
+                year = "20%s" % year
             if len(month) < 2:
                 month = "0%s" % month
             if len(day) < 2:
-                day = "0%s" % day         
+                day = "0%s" % day
 
             print 'year ' + str(year)
             print 'month ' + str(month)
@@ -618,8 +618,8 @@ class helpers(object):
         # TODO improve patterns so 'monkey' isnt a match for 'male'
         male_pattern = "(m[a-z]*)"
         female_pattern =  "(f[a-z]*)"
-        its_a_boy = re.match(male_pattern, gender, re.I) 
-        its_a_girl = re.match(female_pattern, gender, re.I) 
+        its_a_boy = re.match(male_pattern, gender, re.I)
+        its_a_girl = re.match(female_pattern, gender, re.I)
         if its_a_boy is not None:
             return 'M'
         elif its_a_girl is not None:
@@ -649,4 +649,4 @@ class helpers(object):
             else:
                 return None
         except Exception, e:
-            print e 
+            print e

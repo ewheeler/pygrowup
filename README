@@ -48,13 +48,13 @@ my_child = {'date_of_birth' : '100309', 'sex' : 'male',\
 # use helper functions for formatting data
 
 # transform '100309' into '2009-03-10'
-valid_date = cg.helpers.get_good_date(my_child['date_of_birth'])
+valid_date = helpers.get_good_date(my_child['date_of_birth'])
 
 # transform 'male' into 'M'
-valid_gender = cg.helpers.get_good_sex('male')
+valid_gender = helpers.get_good_sex('male')
 
 # calculate 9 months from '2009-03-10'
-valid_age = cg.helpers.date_to_age_in_months(valid_date)
+valid_age = helpers.date_to_age_in_months(valid_date[1])
 
 
 # call zscore_for_measurement(indicator, measurement,\
@@ -63,12 +63,12 @@ valid_age = cg.helpers.date_to_age_in_months(valid_date)
 
 # calculate length/height-for-age zscore
 lhfa_zscore_for_my_child = cg.zscore_for_measurement('lhfa',\
-    mychild['height'], valid_age, valid_gender)
+    my_child['height'], valid_age, valid_gender)
 
 # calculate weight-for-age zscore
 wfa_zscore_for_my_child = cg.zscore_for_measurement('wfa',\
-    mychild['weight'], valid_age, valid_gender)
+    my_child['weight'], valid_age, valid_gender)
 
 # calculate weight-for-length zscore
 wfl_zscore_for_my_child = cg.zscore_for_measurement('wfl',\
-    mychild['weight'], valid_age, valid_gender, mychild['height'])
+    my_child['weight'], valid_age, valid_gender, my_child['height'])

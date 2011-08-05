@@ -4,6 +4,9 @@ based on the WHO Child Growth Standards:
     http://www.who.int/childgrowth/standards/en/
     http://www.who.int/entity/childgrowth/standards/technical_report/en/index.html
 
+and can optionally use CDC growth standards:
+    http://www.cdc.gov/growthcharts
+
 pygrowup avoids floating-point operations to eliminate the unwanted rounding
 that muddles the precision of some of the igrowup implementations:
     http://docs.sun.com/source/806-3568/ncg_goldberg.html
@@ -17,7 +20,7 @@ INSTALLATION:
 pip install pygrowup
 
 EXAMPLE USAGE:
-from pygrowup.pygrowup import * 
+from pygrowup.pygrowup import *
 
 # Height adjustments are part of the WHO specification (see section 5.1)
 # to correct for recumbent vs standing measurements,
@@ -30,13 +33,13 @@ from pygrowup.pygrowup import *
 # correct for right skewness and avoid making assumptions about
 # the distribution of data beyond the limits of the observed values.
 #
-# However, when calculating z-scores in a live data collection 
+# However, when calculating z-scores in a live data collection
 # situation, z-scores greater than +/- 3 SDs are likely to indicate
 # data entry or anthropometric measurement errors and should not
 # be adjusted. Instead, these large z-scores should be used to
 # identify poor data quality and/or entry errors.
 # These z-score adjustments are appropriate only when there
-# is confidence in data quality. 
+# is confidence in data quality.
 cg = childgrowth(adjust_height_data=False, adjust_weight_scores=False)
 
 my_child = {'date_of_birth' : '100309', 'sex' : 'male',\

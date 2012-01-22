@@ -59,6 +59,7 @@ class childgrowth(object):
             'wfl_boys_0_2_zscores.json',  'wfl_girls_0_2_zscores.json',\
             'wfh_boys_2_5_zscores.json',  'wfh_girls_2_5_zscores.json',\
             'lhfa_boys_0_5_zscores.json', 'lhfa_girls_0_5_zscores.json',\
+            'hcfa_boys_0_5_zscores.json', 'hcfa_girls_0_5_zscores.json',\
             'wfa_boys_0_5_zscores.json',  'wfa_girls_0_5_zscores.json']
 
         # load CDC growth standards
@@ -318,7 +319,7 @@ class childgrowth(object):
         
     def zscore_for_measurement(self, indicator, measurement, age_in_months, gender, height=None):
         assert gender.upper() in ["M", "F"]
-        assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa", "bmifa"]
+        assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa", "bmifa", "hcfa"]
         debug = False
         # print indicator + " " + str(measurement) + " " + str(age_in_months)\
         #     + " " + str(gender)
@@ -337,6 +338,9 @@ class childgrowth(object):
                 table_name = table_name + "2_20"
             else:
                 table_name = table_name + "0_5"
+        # head circumference for age is WHO-only and comes as a single 0-5
+        if indicator.lower() in ["hcfa"]:
+            table_name = table_name + "0_5"
         # these two checks shouldnt be necessary, but just in case
         elif indicator.lower() in ["wfl"]:
             table_name = table_name + "0_2"
@@ -375,7 +379,7 @@ class childgrowth(object):
                 zscores = self._get_zscores_by_height(table_name, height)
             else:
                 print "NO LENGTH OR HEIGHT"
-        if indicator.lower() in ["lhfa", "wfa", "bmifa"]:
+        if indicator.lower() in ["lhfa", "wfa", "bmifa", "hcfa"]:
             if t is not None:
                 if self.american_standards:
                     # CDC standards are for ages 2-20
@@ -383,6 +387,9 @@ class childgrowth(object):
                         # BMI for Age stats don't exist for 0-2
                         if indicator.lower() == 'bmifa' and t < D(24):
                             return 'TOO YOUNG'
+                        # Head circumference for Age stats don't exist for 5-20
+                        if indicator.lower() == "hcfa" and t > D(60):
+                            return 'TOO OLD'
                         else:
                             zscores = self._get_zscores_by_month(table_name, t)
                     else:

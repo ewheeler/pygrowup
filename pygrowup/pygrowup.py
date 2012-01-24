@@ -339,7 +339,7 @@ class childgrowth(object):
             else:
                 table_name = table_name + "0_5"
         # head circumference for age is WHO-only and comes as a single 0-5
-        if indicator.lower() in ["hcfa"]:
+        elif indicator.lower() in ["hcfa"]:
             table_name = table_name + "0_5"
         # these two checks shouldnt be necessary, but just in case
         elif indicator.lower() in ["wfl"]:

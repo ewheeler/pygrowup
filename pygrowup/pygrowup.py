@@ -38,6 +38,61 @@ class Observation(object):
             if self.height in ['', ' ', None]:
                 raise exceptions.InvalidMeasurement('no length or height')
 
+    @property
+    def age_in_weeks(self):
+        return ((self.age * D(30.4374)) / D(7))
+
+    @property
+    def rounded_height(self):
+        """ Rounds height to closest half centimeter -- the resolution
+            of the WHO tables. Oddly, the WHO tables do not include
+            decimal places for whole centimeters, so some strange
+            rounding is necessary (e.g., 89 not 89.0).
+        """
+        # round height to closest half centimeter
+        correction = D('0.5') if D(self.height) >= D(0) else D('-0.5')
+        rounded = int(D(self.height) / D('0.5') + correction) * D('0.5')
+        # if closest half centimeter is an integer,
+        # return as integer without decimal
+        if rounded.as_tuple().digits[-1] == 0:
+            return D(int(rounded)).to_eng_string()
+        # otherwise return with decimal places
+        return rounded.to_eng_string()
+
+    def get_zscores(self, growth):
+        table_name = self.resolve_table()
+        table = getattr(growth, table_name)
+        if self.indicator in ["wfh", "wfl"]:
+            assert self.height is not None
+            if D(self.height) < D(45):
+                raise exceptions.InvalidMeasurement("too short")
+            if D(self.height) > D(120):
+                raise exceptions.InvalidMeasurement("too tall")
+            # find closest height from WHO table (which has data at a resolution
+            # of half a centimeter).
+            # round height to closest tenth of a centimeter
+            # NOTE heights in tables are EITHER ints or floats!
+            # (e.g., 60, 60.5)
+            closest_height = self.rounded_height
+            print "looking up scores with: %s" % closest_height
+            scores = table.get(closest_height)
+            if scores is not None:
+                return scores
+            raise exceptions.DataNotFound("SCORES NOT FOUND BY HEIGHT: %s => %s" % (self.height, closest_height))
+
+        elif self.indicator in ["lhfa", "wfa", "bmifa", "hcfa"]:
+            if self.age_in_weeks <= D(13):
+                closest_week = str(int(math.floor(self.age_in_weeks)))
+                scores = table.get(closest_week)
+                if scores is not None:
+                    return scores
+                raise exceptions.DataNotFound("SCORES NOT FOUND BY WEEK: %s => %s" % (str(self.age_in_weeks), closest_week))
+            closest_month = str(int(math.floor(self.age)))
+            scores = table.get(closest_month)
+            if scores is not None:
+                return scores
+            raise exceptions.DataNotFound("SCORES NOT FOUND BY MONTH: %s => %s" % (str(self.age), closest_month))
+
     def resolve_table(self):
         if self.indicator == 'wfl' and D(self.height) > D(86):
             print 'too long for recumbent'
@@ -64,8 +119,27 @@ class Observation(object):
         # and CDC goes unused before 24mos
         if self.indicator in ["wfa", "lhfa", "hcfa"]:
             self.table_age = "0_5"
+            if self.age <= D(3):
+                if self.age_in_weeks <= D(13):
+                    self.table_age = "0_13"
             if self.american and self.age >= D(24):
+                if self.indicator == "hcfa":
+                    raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
                 self.table_age = "2_20"
+        elif self.indicator in ["bmifa"]:
+            if self.age > D(240):
+                raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
+            elif self.age <= D(3):
+                if self.age_in_weeks <= D(13):
+                    self.table_age = "0_13"
+            elif self.age < D(24):
+                self.table_age = '0_2'
+            elif self.age >= D(24) and self.age <= D(60):
+                self.table_age = '2_5'
+            elif self.age >= D(24) and self.age > D(60):
+                self.table_age = '2_20'
+            else:
+                raise exceptions.DataNotFound()
         else:
             if self.table_age is None:
                 if self.table_indicator == 'wfl':
@@ -89,6 +163,23 @@ class Observation(object):
 
 
 class Growth(object):
+
+    def __reformat_table(self, table_name):
+        list_of_dicts = getattr(self, table_name)
+        if 'Length' in list_of_dicts[0]:
+            field_name = 'Length'
+        elif 'Height' in list_of_dicts[0]:
+            field_name = 'Height'
+        elif 'Month' in list_of_dicts[0]:
+            field_name = 'Month'
+        elif 'Week' in list_of_dicts[0]:
+            field_name = 'Week'
+        else:
+            raise RuntimeError('unknown dict type')
+        new_dict = {'field_name': field_name}
+        for d in list_of_dicts:
+            new_dict.update({d[field_name]: d})
+        setattr(self, table_name, new_dict)
 
     def __init__(self, adjust_height_data=False, adjust_weight_scores=False, american_standards=False):
         # use decimal.Decimal instead of float to avoid unwanted rounding
@@ -128,7 +219,10 @@ class Growth(object):
             'wfh_boys_2_5_zscores.json',  'wfh_girls_2_5_zscores.json',
             'lhfa_boys_0_5_zscores.json', 'lhfa_girls_0_5_zscores.json',
             'hcfa_boys_0_5_zscores.json', 'hcfa_girls_0_5_zscores.json',
-            'wfa_boys_0_5_zscores.json',  'wfa_girls_0_5_zscores.json']
+            'wfa_boys_0_5_zscores.json',  'wfa_girls_0_5_zscores.json',
+            'wfa_boys_0_13_zscores.json',  'wfa_girls_0_13_zscores.json',
+            'lhfa_boys_0_13_zscores.json', 'lhfa_girls_0_13_zscores.json',
+            'hcfa_boys_0_13_zscores.json', 'hcfa_girls_0_13_zscores.json']
 
         # load CDC growth standards
         # http://www.cdc.gov/growthcharts/
@@ -151,6 +245,7 @@ class Growth(object):
                 table_name, underscore, zscore_part =\
                     table.split('.')[0].rpartition('_')
                 setattr(self, table_name, json.load(f))
+                self.__reformat_table(table_name)
         if american_standards:
             for table in CDC_tables:
                     table_file = os.path.join(table_dir, table)
@@ -161,111 +256,19 @@ class Growth(object):
                         table_name, underscore, zscore_part =\
                             table.split('.')[0].rpartition('_')
                         setattr(self, table_name, json.load(f))
-
-    def _get_zscores_by_month(self, table_name, month):
-        table = getattr(self, table_name)
-        # TODO interpolate?
-        closest_month = int(math.floor(month))
-        if table_name[2] == 'l':
-            assert closest_month <= 24
-        elif table_name[2] == 'h':
-            assert closest_month <= 60
-        for scores in table:
-            m = scores.get("Month")
-            if m == str(closest_month):
-                #print scores
-                return scores
-        raise exceptions.DataNotFound("SCORES NOT FOUND BY MONTH: " + str(month))
-
-    def _get_zscores_by_height(self, table_name, height):
-        table = getattr(self, table_name)
-        # TODO be more clever?
-        if D(height) < D(45):
-            raise exceptions.InvalidMeasurement("too short")
-        if D(height) > D(120):
-            raise exceptions.InvalidMeasurement("too tall")
-        field_name = None
-        if table_name[2] == 'l':
-            field_name = 'Length'
-        if table_name[2] == 'h':
-            field_name = 'Height'
-        if field_name is None:
-            raise exceptions.InvalidMeasurement()
-
-        # find closest height from WHO table (which has data at a resolution
-        # of half a centimeter).
-        # round height to closest tenth of a centimeter
-        # NOTE months in table are not ints or floats
-        # (e.g., 60, 60.5)
-        # TODO interpolate?
-        rounded_to_tenth = str(D(height).quantize(D('.1')))
-        tenth = int(rounded_to_tenth[-1])
-        # use the closest half centimeter
-        if tenth in [0, 1, 2, 8, 9]:
-            # remove decimal point too!
-            closest_height = rounded_to_tenth[:-2]
-        elif tenth in [3, 4, 6, 7]:
-            closest_height = rounded_to_tenth[:-1] + "5"
-        else:
-            # this should only be hit by heights ending in .5
-            closest_height = rounded_to_tenth
-
-        print "looking up scores with: " + closest_height
-        for scores in table:
-            h = scores.get(field_name)
-            if h is not None:
-                if h == closest_height:
-                    #print scores
-                    return scores
-        raise exceptions.DataNotFound("SCORES NOT FOUND BY HEIGHT: " + str(height) + " -> " + closest_height)
-
-    @staticmethod
-    def _add_sex_to_string(table_name, sex):
-        if sex == "M":
-            new_table_name = table_name + 'boys_'
-            return new_table_name
-        elif sex == "F":
-            new_table_name = table_name + 'girls_'
-            return new_table_name
-        else:
-            raise exceptions.DataNotFound()
+                        self.__reformat_table(table_name)
 
     def zscore_for_measurement(self, indicator, measurement, age_in_months, sex, height=None):
         assert sex is not None and sex.upper() in ["M", "F"]
         assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa", "bmifa", "hcfa"]
         obs = Observation(indicator, measurement, age_in_months, sex, height, self.american_standards)
         debug = False
-        # print indicator + " " + str(measurement) + " " + str(age_in_months)\
-        #     + " " + str(sex)
-        # print self.american_standards
-        table_name = indicator + "_"
-        table_name = self._add_sex_to_string(table_name, sex)
-
-        # check age and update table_name string
-        t = D(age_in_months)
-        if indicator.lower() in ["wfa", "lhfa"]:
-            # weight for age has only one table per sex, and CDC goes unused before 24mos
-            if self.american_standards and age_in_months >= 24:
-                table_name = table_name + "2_20"
-            else:
-                table_name = table_name + "0_5"
-        # head circumference for age is WHO-only and comes as a single 0-5
-        elif indicator.lower() in ["hcfa"]:
-            table_name = table_name + "0_5"
-        # these two checks shouldnt be necessary, but just in case
-        elif indicator.lower() in ["wfl", "wfh"]:
-            if indicator.lower() == "wfl":
-                table_name = table_name + "0_2"
-            if indicator.lower() == "wfh":
-                table_name = table_name + "2_5"
-        else:
-            # all other tables come as a pair: 0-2 and 2-5 or 2-20
-            table_name = self._add_age_range_to_string(table_name, t, self.american_standards)
 
         # this is our length or height or weight measurement
         if measurement in [0, D(0), '', ' ', None]:
-            raise exceptions.InvalidMeasurement('no measurement given')
-        y = D(measurement)
+            y = D(0)
+        else:
+            y = D(measurement)
         if debug:
             print "MEASUREMENT: " + str(y)
 
@@ -288,38 +291,7 @@ class Growth(object):
             y = y + D('0.7')
 
         # get zscore from appropriate table
-        print table_name
-        table_name_guess = obs.resolve_table()
-        print table_name_guess
-        table_name = table_name_guess
-        #assert table_name == table_name_guess
-        if indicator.lower() in ["wfh", "wfl"]:
-            if height is not None:
-                zscores = self._get_zscores_by_height(table_name, height)
-            else:
-                raise exceptions.DataNotFound("NO LENGTH OR HEIGHT")
-        if indicator.lower() in ["lhfa", "wfa", "bmifa", "hcfa"]:
-            if t is not None:
-                if self.american_standards:
-                    # CDC standards are for ages 2-20
-                    if t <= D(240):
-                        # BMI for Age stats don't exist for 0-2
-                        if indicator.lower() == 'bmifa' and t < D(24):
-                            raise exceptions.InvalidAge('TOO YOUNG')
-                        # Head circumference for Age stats don't exist for 5-20
-                        if indicator.lower() == "hcfa" and t > D(60):
-                            raise exceptions.InvalidAge('TOO OLD')
-                        else:
-                            zscores = self._get_zscores_by_month(table_name, t)
-                    else:
-                        raise exceptions.InvalidAge('TOO OLD')
-                else:
-                    if math.floor(t) <= D(60):
-                        zscores = self._get_zscores_by_month(table_name, t)
-                    else:
-                        raise exceptions.InvalidAge('TOO OLD: %d' % t)
-            else:
-                raise exceptions.InvalidAge("NO AGE")
+        zscores = obs.get_zscores(self)
 
         if zscores is None:
             print "NO SCORES????????????????"

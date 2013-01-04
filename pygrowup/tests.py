@@ -16,17 +16,17 @@ class WHOResult(object):
         for k, v in data:
             setattr(self, k.lower(), v)
         self.age = self.agemons
-        if self.gender == "1":
+        if int(self.gender) == 1:
             self.gender = "M"
-        elif self.gender == "2":
+        elif int(self.gender) == 2:
             self.gender = "F"
         else:
             self.gender = None
 
     def __repr__(self):
-        rep = self.indicator + " " + str(self.id)
-        if all([self.gender, self.agemons, self.height]):
-            rep = rep + " (" + ", ".join([self.gender, self.agemons, self.height]) + ")"
+        rep = self.indicator + " " + str(self.id) + " " + self.agemons
+        if all([self.gender, self.height]):
+            rep = rep + " (" + ", ".join([self.gender, self.height]) + ")"
         return rep
 
     @property
@@ -49,7 +49,7 @@ class WHOResult(object):
 
     @property
     def height(self):
-        if self.indicator in ["wfl", "wfh"]:
+        if self.indicator in ["lhfa", "wfl", "wfh", "wfa"]:
             return self._height
         return None
 
@@ -65,19 +65,33 @@ def compare_result(who):
         if our_result is not None:
             print "US  : " + str(our_result)
             diff = pg.context.subtract(D(who.result), D(our_result))
-            assert abs(diff) <= D(1)
+            assert abs(diff) <= D('1')
 
 
 def test_generator():
     # software uses error-prone floating-point calculations
     module_dir = os.path.split(os.path.abspath(__file__))[0]
-    test_file = os.path.join(module_dir, 'test.csv')
+    test_file = os.path.join(module_dir, 'survey_z_rc.csv')
     csvee = codecs.open(test_file, "rU", encoding='utf-8', errors='ignore')
 
     reader = csv.reader(csvee, dialect="excel")
+    # skip column labels
+    reader.next()
     for row in reader:
-        for indicator in ["lhfa", "wfl", "wfh", "wfa"]:
+        for indicator in ["lhfa", "wfl", "wfh"]:
             who = WHOResult(indicator, row)
+            # ignore these two cases
+            if who.id in ["287", "381"]:
+                continue
+            # also ignore other cases that are missing
+            # height or length data required for these calculations
+            if who.height not in ['', ' ', None]:
+                yield compare_result, who
+        for indicator in ["wfa"]:
+            who = WHOResult(indicator, row)
+            # ignore these two cases
+            if who.id in ["287", "381"]:
+                continue
             yield compare_result, who
 
 if __name__ == '__main__':

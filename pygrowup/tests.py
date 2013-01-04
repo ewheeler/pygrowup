@@ -37,6 +37,8 @@ class WHOResult(object):
             return self.zwfl
         if self.indicator == "wfa":
             return self.zwei
+        if self.indicator == "bmifa":
+            return self.zbmi
 
     @property
     def measurement(self):
@@ -46,6 +48,8 @@ class WHOResult(object):
             return self.weight
         if self.indicator == "wfa":
             return self.weight
+        if self.indicator == "bmifa":
+            return self.cbmi
 
     @property
     def height(self):
@@ -57,7 +61,7 @@ class WHOResult(object):
 def compare_result(who):
     our_result = None
     #print who.indicator.upper() + " (" + str(who.measurement) + ") " + who.gender + " " + who.age + " " + str(who.height)
-    pg = pygrowup.Growth()
+    pg = pygrowup.Growth(include_cdc=True)
     our_result = pg.zscore_for_measurement(who.indicator, who.measurement,
                                            who.age, who.gender, who.height)
     print "THEM: " + str(who.result)
@@ -65,6 +69,7 @@ def compare_result(who):
         if our_result is not None:
             print "US  : " + str(our_result)
             diff = pg.context.subtract(D(who.result), D(our_result))
+            print "DIFF: " + str(abs(diff))
             assert abs(diff) <= D('1')
 
 
@@ -87,7 +92,7 @@ def test_generator():
             # height or length data required for these calculations
             if who.height not in ['', ' ', None]:
                 yield compare_result, who
-        for indicator in ["wfa"]:
+        for indicator in ["wfa", "bmifa"]:
             who = WHOResult(indicator, row)
             # ignore these two cases
             if who.id in ["287", "381"]:

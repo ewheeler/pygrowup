@@ -181,7 +181,7 @@ class Growth(object):
             new_dict.update({d[field_name]: d})
         setattr(self, table_name, new_dict)
 
-    def __init__(self, adjust_height_data=False, adjust_weight_scores=False, american_standards=False):
+    def __init__(self, adjust_height_data=False, adjust_weight_scores=False, include_cdc=False):
         # use decimal.Decimal instead of float to avoid unwanted rounding
         # http://docs.sun.com/source/806-3568/ncg_goldberg.html
         # TODO set a custom precision
@@ -207,7 +207,7 @@ class Growth(object):
         # is confidence in data quality.
         self.adjust_weight_scores = adjust_weight_scores
 
-        self.american_standards = american_standards
+        self.include_cdc = include_cdc
 
         # load WHO Growth Standards
         # http://www.who.int/childgrowth/standards/en/
@@ -222,7 +222,10 @@ class Growth(object):
             'wfa_boys_0_5_zscores.json',  'wfa_girls_0_5_zscores.json',
             'wfa_boys_0_13_zscores.json',  'wfa_girls_0_13_zscores.json',
             'lhfa_boys_0_13_zscores.json', 'lhfa_girls_0_13_zscores.json',
-            'hcfa_boys_0_13_zscores.json', 'hcfa_girls_0_13_zscores.json']
+            'hcfa_boys_0_13_zscores.json', 'hcfa_girls_0_13_zscores.json',
+            'bmifa_boys_0_13_zscores.json', 'bmifa_girls_0_13_zscores.json',
+            'bmifa_boys_0_2_zscores.json',  'bmifa_girls_0_2_zscores.json',
+            'bmifa_boys_2_5_zscores.json',  'bmifa_girls_2_5_zscores.json']
 
         # load CDC growth standards
         # http://www.cdc.gov/growthcharts/
@@ -236,7 +239,10 @@ class Growth(object):
 
         # TODO is this the best way to find the tables?
         table_dir = os.path.join(module_dir, 'tables')
-        for table in WHO_tables:
+        tables_to_load = WHO_tables
+        if self.include_cdc:
+            tables_to_load = tables_to_load + CDC_tables
+        for table in tables_to_load:
             table_file = os.path.join(table_dir, table)
             with open(table_file, 'r') as f:
                 # drop _zscores.json from table name and use
@@ -246,27 +252,18 @@ class Growth(object):
                     table.split('.')[0].rpartition('_')
                 setattr(self, table_name, json.load(f))
                 self.__reformat_table(table_name)
-        if american_standards:
-            for table in CDC_tables:
-                    table_file = os.path.join(table_dir, table)
-                    with open(table_file, 'r') as f:
-                        # drop _zscores.cdc.json from table name and use
-                        # result as attribute name
-                        # (e.g., wfa_boys_0_5_zscores.json => wfa_boys_0_5)
-                        table_name, underscore, zscore_part =\
-                            table.split('.')[0].rpartition('_')
-                        setattr(self, table_name, json.load(f))
-                        self.__reformat_table(table_name)
 
-    def zscore_for_measurement(self, indicator, measurement, age_in_months, sex, height=None):
+    def zscore_for_measurement(self, indicator, measurement, age_in_months, sex, height=None, debug=False):
         assert sex is not None and sex.upper() in ["M", "F"]
         assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa", "bmifa", "hcfa"]
-        obs = Observation(indicator, measurement, age_in_months, sex, height, self.american_standards)
-        debug = False
+        obs = Observation(indicator, measurement, age_in_months, sex, height, self.include_cdc)
 
-        # this is our length or height or weight measurement
+        # this is our length or height or weight or bmi measurement
         if measurement in [0, D(0), '', ' ', None]:
-            y = D(0)
+            # reject blank measurements
+            # also reject 0 because the math won't work.
+            # and that would be an impossibly shaped human.
+            return False
         else:
             y = D(measurement)
         if debug:
@@ -321,11 +318,22 @@ class Growth(object):
         #   Zind =  -----------------
         #               S(t)L(t)
         ###
-        power = math.pow(self.context.divide(y, median_for_age), box_cox_power)
+        base = self.context.divide(y, median_for_age)
+        if debug:
+            print "BASE: " + str(base)
+        power = base ** box_cox_power
+        if debug:
+            print "POWER: " + str(power)
         numerator = D(str(power)) - D(1)
+        if debug:
+            print "NUMERATOR: " + str(numerator)
         denomenator = self.context.multiply(coefficient_of_variance_for_age,
                                             box_cox_power)
+        if debug:
+            print "DENOMENATOR: " + str(denomenator)
         zscore = self.context.divide(numerator, denomenator)
+        if debug:
+            print "ZSCORE: " + str(zscore)
 
         # TODO this is probably unneccesary, as it should work out to be the
         # same as the above z-score calculation

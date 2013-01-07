@@ -76,7 +76,7 @@ def compare_result(who):
 def test_generator():
     # software uses error-prone floating-point calculations
     module_dir = os.path.split(os.path.abspath(__file__))[0]
-    test_file = os.path.join(module_dir, 'survey_z_rc.csv')
+    test_file = os.path.join(module_dir, 'testdata', 'survey_z_rc.csv')
     csvee = codecs.open(test_file, "rU", encoding='utf-8', errors='ignore')
 
     reader = csv.reader(csvee, dialect="excel")

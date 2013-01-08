@@ -162,7 +162,7 @@ class Observation(object):
                "table_age": self.table_age}
 
 
-class Growth(object):
+class Calculator(object):
 
     def __reformat_table(self, table_name):
         list_of_dicts = getattr(self, table_name)
@@ -252,6 +252,25 @@ class Growth(object):
                     table.split('.')[0].rpartition('_')
                 setattr(self, table_name, json.load(f))
                 self.__reformat_table(table_name)
+
+    # convenience methods
+    def lhfa(self, measurement, age_in_months, sex, height=None, debug=False):
+        return self.zscore_for_measurement('lhfa', age_in_months, sex, height, debug)
+
+    def wfl(self, measurement, age_in_months, sex, height=None, debug=False):
+        return self.zscore_for_measurement('wfl', age_in_months, sex, height, debug)
+
+    def wfh(self, measurement, age_in_months, sex, height=None, debug=False):
+        return self.zscore_for_measurement('wfh', age_in_months, sex, height, debug)
+
+    def wfa(self, measurement, age_in_months, sex, height=None, debug=False):
+        return self.zscore_for_measurement('wfa', age_in_months, sex, height, debug)
+
+    def bmifa(self, measurement, age_in_months, sex, height=None, debug=False):
+        return self.zscore_for_measurement('bmifa', age_in_months, sex, height, debug)
+
+    def hcfa(self, measurement, age_in_months, sex, height=None, debug=False):
+        return self.zscore_for_measurement('hcfa', age_in_months, sex, height, debug)
 
     def zscore_for_measurement(self, indicator, measurement, age_in_months, sex, height=None, debug=False):
         assert sex is not None and sex.upper() in ["M", "F"]

@@ -41,7 +41,7 @@ from pygrowup import *
 # identify poor data quality and/or entry errors.
 # These z-score adjustments are appropriate only when there
 # is confidence in data quality.
-cg = Growth(adjust_height_data=False, adjust_weight_scores=False)
+calculator = Calculator(adjust_height_data=False, adjust_weight_scores=False)
 
 my_child = {'date_of_birth' : '100309', 'sex' : 'male',\
             'weight' : '8.0', 'height' : '69.5'}
@@ -63,15 +63,15 @@ valid_age = helpers.date_to_age_in_months(valid_date[1])
 # optional height parameter is only necessary for weight-for-height
 
 # calculate length/height-for-age zscore
-lhfa_zscore_for_my_child = cg.zscore_for_measurement('lhfa',\
+lhfa_zscore_for_my_child = calculator.lhfa(\
     my_child['height'], valid_age, valid_gender)
 
 # calculate weight-for-age zscore
-wfa_zscore_for_my_child = cg.zscore_for_measurement('wfa',\
+wfa_zscore_for_my_child = calculator.wfa(\
     my_child['weight'], valid_age, valid_gender)
 
 # calculate weight-for-length zscore
-wfl_zscore_for_my_child = cg.zscore_for_measurement('wfl',\
+wfl_zscore_for_my_child = calculator.wfl(\
     my_child['weight'], valid_age, valid_gender, my_child['height'])
 
 

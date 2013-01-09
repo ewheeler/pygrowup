@@ -5,6 +5,7 @@ from __future__ import with_statement
 import os
 import math
 import decimal
+import logging
 from decimal import Decimal as D
 
 import exceptions
@@ -27,7 +28,7 @@ class Observation(object):
         self.measurement = measurement
         self.position = None
         self.age = D(age_in_months)
-        self.sex = sex
+        self.sex = sex.upper()
         self.height = height
         self.american = american
 
@@ -165,6 +166,8 @@ class Observation(object):
 class Calculator(object):
 
     def __reformat_table(self, table_name):
+        """ Reformat list of dicts to single dict
+        with each item keyed by age, length, or height."""
         list_of_dicts = getattr(self, table_name)
         if 'Length' in list_of_dicts[0]:
             field_name = 'Length'
@@ -175,13 +178,16 @@ class Calculator(object):
         elif 'Week' in list_of_dicts[0]:
             field_name = 'Week'
         else:
-            raise RuntimeError('unknown dict type')
+            raise exceptions.DataError('error loading: %s' % table_name)
         new_dict = {'field_name': field_name}
         for d in list_of_dicts:
             new_dict.update({d[field_name]: d})
         setattr(self, table_name, new_dict)
 
-    def __init__(self, adjust_height_data=False, adjust_weight_scores=False, include_cdc=False):
+    def __init__(self, adjust_height_data=False, adjust_weight_scores=False, include_cdc=False, logger_name='pygrowup', log_level="INFO"):
+        self.logger = logging.getLogger(logger_name)
+        self.logger.setLevel(getattr(logging, log_level))
+
         # use decimal.Decimal instead of float to avoid unwanted rounding
         # http://docs.sun.com/source/806-3568/ncg_goldberg.html
         # TODO set a custom precision
@@ -254,39 +260,56 @@ class Calculator(object):
                 self.__reformat_table(table_name)
 
     # convenience methods
-    def lhfa(self, measurement, age_in_months, sex, height=None, debug=False):
-        return self.zscore_for_measurement('lhfa', age_in_months, sex, height, debug)
+    def lhfa(self, measurement=None, age_in_months=None, sex=None, height=None):
+        return self.zscore_for_measurement('lhfa', measurement=measurement,
+                                           age_in_months=age_in_months,
+                                           sex=sex, height=height)
 
-    def wfl(self, measurement, age_in_months, sex, height=None, debug=False):
-        return self.zscore_for_measurement('wfl', age_in_months, sex, height, debug)
+    def wfl(self, measurement=None, age_in_months=None, sex=None, height=None):
+        return self.zscore_for_measurement('wfl', measurement=measurement,
+                                           age_in_months=age_in_months,
+                                           sex=sex, height=height)
 
-    def wfh(self, measurement, age_in_months, sex, height=None, debug=False):
-        return self.zscore_for_measurement('wfh', age_in_months, sex, height, debug)
+    def wfh(self, measurement=None, age_in_months=None, sex=None, height=None):
+        return self.zscore_for_measurement('wfh', measurement=measurement,
+                                           age_in_months=age_in_months,
+                                           sex=sex, height=height)
 
-    def wfa(self, measurement, age_in_months, sex, height=None, debug=False):
-        return self.zscore_for_measurement('wfa', age_in_months, sex, height, debug)
+    def wfa(self, measurement=None, age_in_months=None, sex=None, height=None):
+        return self.zscore_for_measurement('wfa', measurement=measurement,
+                                           age_in_months=age_in_months,
+                                           sex=sex, height=height)
 
-    def bmifa(self, measurement, age_in_months, sex, height=None, debug=False):
-        return self.zscore_for_measurement('bmifa', age_in_months, sex, height, debug)
+    def bmifa(self, measurement=None, age_in_months=None, sex=None, height=None):
+        return self.zscore_for_measurement('bmifa', measurement=measurement,
+                                           age_in_months=age_in_months,
+                                           sex=sex, height=height)
 
-    def hcfa(self, measurement, age_in_months, sex, height=None, debug=False):
-        return self.zscore_for_measurement('hcfa', age_in_months, sex, height, debug)
+    def hcfa(self, measurement=None, age_in_months=None, sex=None, height=None):
+        return self.zscore_for_measurement('hcfa', measurement=measurement,
+                                           age_in_months=age_in_months,
+                                           sex=sex, height=height)
 
-    def zscore_for_measurement(self, indicator, measurement, age_in_months, sex, height=None, debug=False):
-        assert sex is not None and sex.upper() in ["M", "F"]
+    def zscore_for_measurement(self, indicator, measurement, age_in_months, sex, height=None):
+        assert sex is not None
+        assert isinstance(sex, basestring)
+        assert sex.upper() in ["M", "F"]
+        assert age_in_months is not None
+        assert indicator is not None
         assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa", "bmifa", "hcfa"]
-        obs = Observation(indicator, measurement, age_in_months, sex, height, self.include_cdc)
+        # reject blank measurements
+        assert measurement not in ['', ' ', None]
 
-        # this is our length or height or weight or bmi measurement
-        if measurement in [0, D(0), '', ' ', None]:
-            # reject blank measurements
-            # also reject 0 because the math won't work.
+        # this is our length or height or weight or bmi measurement.
+        # allow exception if measurement cannot be cast as Decimal
+        y = D(measurement)
+        if y <= D(0):
+            # reject measurements 0 or less because the math won't work.
             # and that would be an impossibly shaped human.
-            return False
-        else:
-            y = D(measurement)
-        if debug:
-            print "MEASUREMENT: " + str(y)
+            raise exceptions.InvalidMeasurement('measurement must be greater than zero')
+        self.logger.debug("MEASUREMENT: %d" % y)
+
+        obs = Observation(indicator, measurement, age_in_months, sex, height, self.include_cdc)
 
         # indicator-specific methodology
         # (see section 5.1 of http://www.who.int/entity/childgrowth/standards/\
@@ -310,22 +333,18 @@ class Calculator(object):
         zscores = obs.get_zscores(self)
 
         if zscores is None:
-            print "NO SCORES????????????????"
-            return D('99.0')
+            raise exceptions.DataNotFound()
 
         # fetch necessary scores from zscores dict and cast as decimals
         # L(t)
         box_cox_power = D(zscores.get("L"))
-        if debug:
-            print "BOX-COX: " + str(box_cox_power)
+        self.logger.debug("BOX-COX: %d" % box_cox_power)
         # M(t)
         median_for_age = D(zscores.get("M"))
-        if debug:
-            print "MEDIAN: " + str(median_for_age)
+        self.logger.debug("MEDIAN: %d" % median_for_age)
         # S(t)
         coefficient_of_variance_for_age = D(zscores.get("S"))
-        if debug:
-            print "COEF VAR: " + str(coefficient_of_variance_for_age)
+        self.logger.debug("COEF VAR: %d" % coefficient_of_variance_for_age)
 
         ###
         # calculate z-score
@@ -338,21 +357,16 @@ class Calculator(object):
         #               S(t)L(t)
         ###
         base = self.context.divide(y, median_for_age)
-        if debug:
-            print "BASE: " + str(base)
+        self.logger.debug("BASE: %d" % base)
         power = base ** box_cox_power
-        if debug:
-            print "POWER: " + str(power)
+        self.logger.debug("POWER: %d" % power)
         numerator = D(str(power)) - D(1)
-        if debug:
-            print "NUMERATOR: " + str(numerator)
+        self.logger.debug("NUMERATOR: %d" % numerator)
         denomenator = self.context.multiply(coefficient_of_variance_for_age,
                                             box_cox_power)
-        if debug:
-            print "DENOMENATOR: " + str(denomenator)
+        self.logger.debug("DENOMENATOR: %d" % denomenator)
         zscore = self.context.divide(numerator, denomenator)
-        if debug:
-            print "ZSCORE: " + str(zscore)
+        self.logger.debug("ZSCORE: %d" % zscore)
 
         # TODO this is probably unneccesary, as it should work out to be the
         # same as the above z-score calculation

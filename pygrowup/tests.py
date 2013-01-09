@@ -61,16 +61,17 @@ class WHOResult(object):
 def compare_result(who):
     our_result = None
     #print who.indicator.upper() + " (" + str(who.measurement) + ") " + who.gender + " " + who.age + " " + str(who.height)
-    pg = pygrowup.Growth(include_cdc=True)
-    our_result = pg.zscore_for_measurement(who.indicator, who.measurement,
-                                           who.age, who.gender, who.height)
-    print "THEM: " + str(who.result)
-    if who.result not in ['', ' ', None]:
-        if our_result is not None:
-            print "US  : " + str(our_result)
-            diff = pg.context.subtract(D(who.result), D(our_result))
-            print "DIFF: " + str(abs(diff))
-            assert abs(diff) <= D('1')
+    calc = pygrowup.Calculator(include_cdc=True, log_level='DEBUG')
+    if who.measurement:
+        our_result = calc.zscore_for_measurement(who.indicator, who.measurement,
+                                                 who.age, who.gender, who.height)
+        print "THEM: " + str(who.result)
+        if who.result not in ['', ' ', None]:
+            if our_result is not None:
+                print "US  : " + str(our_result)
+                diff = calc.context.subtract(D(who.result), D(our_result))
+                print "DIFF: " + str(abs(diff))
+                assert abs(diff) <= D('1')
 
 
 def test_generator():

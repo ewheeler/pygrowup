@@ -11,19 +11,21 @@ from decimal import Decimal as D
 import exceptions
 
 try:
+    # Python 2.6 includes json library
+    import json
+except ImportError:
     # NOTE Python 2.5 requires installation of simplejson library
     # http://pypi.python.org/pypi/simplejson
     import simplejson as json
-except ImportError:
-    # Python 2.6 includes json library
-    import json
 
 # TODO is this the best way to get this file's directory?
 module_dir = os.path.split(os.path.abspath(__file__))[0]
 
 
 class Observation(object):
-    def __init__(self, indicator, measurement, age_in_months, sex, height, american):
+    def __init__(self, indicator, measurement, age_in_months, sex, height, american, logger_name):
+        self.logger = logging.getLogger(logger_name)
+
         self.indicator = indicator
         self.measurement = measurement
         self.position = None
@@ -75,7 +77,7 @@ class Observation(object):
             # NOTE heights in tables are EITHER ints or floats!
             # (e.g., 60, 60.5)
             closest_height = self.rounded_height
-            print "looking up scores with: %s" % closest_height
+            self.logger.debug("looking up scores with: %s" % closest_height)
             scores = table.get(closest_height)
             if scores is not None:
                 return scores
@@ -95,12 +97,17 @@ class Observation(object):
             raise exceptions.DataNotFound("SCORES NOT FOUND BY MONTH: %s => %s" % (str(self.age), closest_month))
 
     def resolve_table(self):
+        """ Choose a WHO/CDC table to use, making adjustments
+        based on age, length, or height. If, for example, the
+        indicator is set to wfl while the child is too long for
+        the recumbent tables, this method will make the lookup
+        in the wfh table. """
         if self.indicator == 'wfl' and D(self.height) > D(86):
-            print 'too long for recumbent'
+            self.logger.warning('too long for recumbent')
             self.table_indicator = 'wfh'
             self.table_age = '2_5'
         elif self.indicator == 'wfh' and D(self.height) < D(65):
-            print 'too short for standing'
+            self.logger.warning('too short for standing')
             self.table_indicator = 'wfl'
             self.table_age = '0_2'
         else:
@@ -149,10 +156,12 @@ class Observation(object):
                     self.table_age = '2_5'
                 if self.age < D(24):
                     if self.table_indicator == 'wfh':
+                        self.logger.warning('too young for standing')
                         self.table_indicator == 'wfl'
                     self.table_age = '0_2'
                 elif self.age >= D(24):
                     if self.table_indicator == 'wfl':
+                        self.logger.warning('too old for recumbent')
                         self.table_indicator == 'wfh'
                     self.table_age = '2_5'
                 else:
@@ -261,31 +270,37 @@ class Calculator(object):
 
     # convenience methods
     def lhfa(self, measurement=None, age_in_months=None, sex=None, height=None):
+        """ Calculate length/height-for-age """
         return self.zscore_for_measurement('lhfa', measurement=measurement,
                                            age_in_months=age_in_months,
                                            sex=sex, height=height)
 
     def wfl(self, measurement=None, age_in_months=None, sex=None, height=None):
+        """ Calculate weight-for-length """
         return self.zscore_for_measurement('wfl', measurement=measurement,
                                            age_in_months=age_in_months,
                                            sex=sex, height=height)
 
     def wfh(self, measurement=None, age_in_months=None, sex=None, height=None):
+        """ Calculate weight-for-height """
         return self.zscore_for_measurement('wfh', measurement=measurement,
                                            age_in_months=age_in_months,
                                            sex=sex, height=height)
 
     def wfa(self, measurement=None, age_in_months=None, sex=None, height=None):
+        """ Calculate weight-for-age """
         return self.zscore_for_measurement('wfa', measurement=measurement,
                                            age_in_months=age_in_months,
                                            sex=sex, height=height)
 
     def bmifa(self, measurement=None, age_in_months=None, sex=None, height=None):
+        """ Calculate body-mass-index-for-age """
         return self.zscore_for_measurement('bmifa', measurement=measurement,
                                            age_in_months=age_in_months,
                                            sex=sex, height=height)
 
     def hcfa(self, measurement=None, age_in_months=None, sex=None, height=None):
+        """ Calculate head-circumference-for-age """
         return self.zscore_for_measurement('hcfa', measurement=measurement,
                                            age_in_months=age_in_months,
                                            sex=sex, height=height)
@@ -309,7 +324,8 @@ class Calculator(object):
             raise exceptions.InvalidMeasurement('measurement must be greater than zero')
         self.logger.debug("MEASUREMENT: %d" % y)
 
-        obs = Observation(indicator, measurement, age_in_months, sex, height, self.include_cdc)
+        obs = Observation(indicator, measurement, age_in_months, sex, height,
+                          self.include_cdc, self.logger.name)
 
         # indicator-specific methodology
         # (see section 5.1 of http://www.who.int/entity/childgrowth/standards/\

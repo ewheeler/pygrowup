@@ -21,7 +21,9 @@ INSTALLATION:
 pip install pygrowup
 
 EXAMPLE USAGE:
-from pygrowup import *
+from pygrowup import Calculator
+# helpers contains optional utilities for formatting dates, etc
+from pygrowup import helpers
 
 # Height adjustments are part of the WHO specification (see section 5.1)
 # to correct for recumbent vs standing measurements,
@@ -41,12 +43,25 @@ from pygrowup import *
 # identify poor data quality and/or entry errors.
 # These z-score adjustments are appropriate only when there
 # is confidence in data quality.
-calculator = Calculator(adjust_height_data=False, adjust_weight_scores=False)
+#
+# In this example, Calculator is initialized with its default values
+# (i.e., `calculator = Calculator()` would do the same thing).
+# The `include_cdc` option will enable CDC measurements for children >5 years.
+calculator = Calculator(adjust_height_data=False, adjust_weight_scores=False,
+			include_cdc=False, logger_name='pygrowup',
+			log_level='INFO')
 
-my_child = {'date_of_birth' : '100309', 'sex' : 'male',\
-            'weight' : '8.0', 'height' : '69.5'}
+# for a timeless example, lets pick a birthdate nine months ago
+import datetime
+great_day = datetime.datetime.utcnow().date()
+nine_months_ago = great_day - datetime.timedelta(days=(9 * 30.4374))
 
-# use helper functions for formatting data
+# nine months ago in an odd, ambiguous string format
+dob = nine_months_ago.strftime("%d%m%y")
+
+my_child = {'date_of_birth' : dob, 'sex' : 'male', 'weight' : '8.0', 'height' : '69.5'}
+
+# optionally use helper functions for formatting data
 
 # transform '100309' into '2009-03-10'
 valid_date = helpers.get_good_date(my_child['date_of_birth'])
@@ -58,10 +73,6 @@ valid_gender = helpers.get_good_sex('male')
 valid_age = helpers.date_to_age_in_months(valid_date[1])
 
 
-# call zscore_for_measurement(indicator, measurement,\
-#    age_in_months, gender, height)
-# optional height parameter is only necessary for weight-for-height
-
 # calculate length/height-for-age zscore
 lhfa_zscore_for_my_child = calculator.lhfa(\
     my_child['height'], valid_age, valid_gender)
@@ -71,7 +82,13 @@ wfa_zscore_for_my_child = calculator.wfa(\
     my_child['weight'], valid_age, valid_gender)
 
 # calculate weight-for-length zscore
+# optional height parameter is only necessary for weight-for-height
+# and weight-for-length
 wfl_zscore_for_my_child = calculator.wfl(\
+    my_child['weight'], valid_age, valid_gender, my_child['height'])
+
+# Note: for backwards compatibility you may still make calls to:
+wfl_zscore_for_my_child = calculator.zscore_for_measurement('wfl',\
     my_child['weight'], valid_age, valid_gender, my_child['height'])
 
 

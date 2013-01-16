@@ -158,5 +158,5 @@ two amazing python utilities:
 * csvkit http://pypi.python.org/pypi/csvkit
 
 # heres an example one-liner that changes the source .txt from tsv
-# to csv (with ``pyp``) and then to json (with csvkit's ``csvjson``)
+# to csv (with `pyp`) and then to json (with csvkit's `csvjson`)
 `$ cat bmi_girls_2_5_zscores.txt | pyp "p.replace('\t', ',')" | csvjson > bmifa_girls_2_5_zscores.json`

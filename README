@@ -3,19 +3,27 @@ pygrowup
 ========
 
 pygrowup calculates z-scores for the following anthropometric indicators:
-    weight-for-age, length/height-for-age, weight-for-length/height,
-    head-circumference-for-age, and body-mass-index-for-age
+
+* weight-for-age
+
+* length/height-for-age
+
+* weight-for-length/height
+
+* head-circumference-for-age
+
+* body-mass-index-for-age
 
 based on the WHO Child Growth Standards:
-    http://www.who.int/childgrowth/standards/en/
-    http://www.who.int/entity/childgrowth/standards/technical_report/en/index.html
+* http://www.who.int/childgrowth/standards/en/
+* http://www.who.int/entity/childgrowth/standards/technical_report/en/index.html
 
 and can optionally use CDC growth standards:
-    http://www.cdc.gov/growthcharts
+* http://www.cdc.gov/growthcharts
 
 pygrowup avoids floating-point operations to eliminate the unwanted rounding
 that muddles the precision of some of the igrowup implementations:
-    http://docs.sun.com/source/806-3568/ncg_goldberg.html
+* http://docs.sun.com/source/806-3568/ncg_goldberg.html
 
 
 REQUIREMENTS
@@ -125,25 +133,25 @@ as well as more specific errors (all subclasses of `RuntimeError`):
 TESTING
 =======
 
-# install nose to execute tests
+install nose to execute tests:
 `pip install nose`
 
-# the included tests use example anthropometric data taken from
-# demonstration data shipped with WHO's igrowup software.
-# pygrowup performs the same calculations and compares the results
-# to the WHO results.
-# please see the sofware licence agreement for WHO's igrowup, which
-# is the souce of the test data files:
-# http://www.who.int/childgrowth/software/license2.pdf
-#
-# currently, 5 cases fail to produce results within 1 standard deviation
-# of the WHO resuts. I believe these discrepencies are due to WHO's use
-# of floating point arithmetic in their igrowup software, which leads to less
-# precise calculations compared to pygrowup. In the absence of any other
-# trusted test data, please be aware that no claims are made to the
-# accuracy or reliability of pygroup's calculations.
+the included tests use example anthropometric data taken from
+demonstration data shipped with WHO's igrowup software.
+pygrowup performs the same calculations and compares the results
+to the WHO results.
+please see the sofware licence agreement for WHO's igrowup, which
+is the souce of the test data files:
+http://www.who.int/childgrowth/software/license2.pdf
 
-# run the tests
+currently, 5 cases fail to produce results within 1 standard deviation
+of the WHO resuts. I believe these discrepencies are due to WHO's use
+of floating point arithmetic in their igrowup software, which leads to less
+precise calculations compared to pygrowup. In the absence of any other
+trusted test data, please be aware that no claims are made to the
+accuracy or reliability of pygroup's calculations.
+
+to run the tests:
 `$ nosetests tests.py`
 
 
@@ -157,6 +165,6 @@ two amazing python utilities:
 
 * csvkit http://pypi.python.org/pypi/csvkit
 
-# heres an example one-liner that changes the source .txt from tsv
-# to csv (with `pyp`) and then to json (with csvkit's `csvjson`)
+heres an example one-liner that changes the source .txt from tsv
+to csv (with `pyp`) and then to json (with csvkit's `csvjson`)
 `$ cat bmi_girls_2_5_zscores.txt | pyp "p.replace('\t', ',')" | csvjson > bmifa_girls_2_5_zscores.json`

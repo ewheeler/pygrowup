@@ -22,12 +22,12 @@ REQUIREMENTS
 ============
 
 * Python 2.5 or later
-* Additionally, Python 2.5 requires installation of `simplejson library <http://pypi.python.org/pypi/simplejson>`_
+* Additionally, Python 2.5 requires installation of http://pypi.python.org/pypi/simplejson
 
 
 INSTALLATION
 ============
-``pip install pygrowup``
+`pip install pygrowup`
 
 
 EXAMPLE USAGE
@@ -109,24 +109,24 @@ EXCEPTIONS
 
 caller should watch for:
 
-* ``AssertionError`` raised when caller provides inappropriate parameters
+* `AssertionError` raised when caller provides inappropriate parameters
 
-as well as more specific errors (all subclasses of ``RuntimeError``):
+as well as more specific errors (all subclasses of `RuntimeError`):
 
-* ``InvalidMeasurement`` raised when measurement is invalid for requested indicator
+* `InvalidMeasurement` raised when measurement is invalid for requested indicator
 
-* ``InvalidAge`` raised when age is invalid for requested indicator
+* `InvalidAge` raised when age is invalid for requested indicator
 
-* ``DataNotFound`` raised when WHO/CDC data is not found for the requested observation (e.g., box-cox, median, coeffeciant of vairance for age)
+* `DataNotFound` raised when WHO/CDC data is not found for the requested observation (e.g., box-cox, median, coeffeciant of vairance for age)
 
-* ``DataError`` raised when an error occurs while loading WHO/CDC data into memory
+* `DataError` raised when an error occurs while loading WHO/CDC data into memory
 
 
 TESTING
 =======
 
 # install nose to execute tests
-``pip install nose``
+`pip install nose`
 
 # the included tests use example anthropometric data taken from
 # demonstration data shipped with WHO's igrowup software.
@@ -144,7 +144,7 @@ TESTING
 # accuracy or reliability of pygroup's calculations.
 
 # run the tests
-``$ nosetests tests.py``
+`$ nosetests tests.py`
 
 
 DEVELOPING
@@ -153,10 +153,10 @@ DEVELOPING
 The source WHO .txt tables can be easily converted to json with the help of
 two amazing python utilities:
 
-* `The Pyed Piper <https://code.google.com/p/pyp/>`_
+* The Pyed Piper https://code.google.com/p/pyp/
 
-* `csvkit <http://pypi.python.org/pypi/csvkit>`_
+* csvkit http://pypi.python.org/pypi/csvkit
 
 # heres an example one-liner that changes the source .txt from tsv
 # to csv (with ``pyp``) and then to json (with csvkit's ``csvjson``)
-``$ cat bmi_girls_2_5_zscores.txt | pyp "p.replace('\t', ',')" | csvjson > bmifa_girls_2_5_zscores.json``
+`$ cat bmi_girls_2_5_zscores.txt | pyp "p.replace('\t', ',')" | csvjson > bmifa_girls_2_5_zscores.json`

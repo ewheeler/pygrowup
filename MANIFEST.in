@@ -1,6 +1,9 @@
 include LICENSE
 include README
+include CHANGES
+include AUTHORS
 include setup.py
 include distribute_setup.py
 include pygrowup/tables/*.json
+include pygrowup/testdata/*.csv
 recursive-include pygrowup *

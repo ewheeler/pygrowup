@@ -1,6 +1,6 @@
 pygrowup calculates z-scores for the following anthropometric indicators:
     weight-for-age, length/height-for-age, weight-for-length/height,
-    head-circumference-for-age, and body-mass-index-for age
+    head-circumference-for-age, and body-mass-index-for-age
 based on the WHO Child Growth Standards:
     http://www.who.int/childgrowth/standards/en/
     http://www.who.int/entity/childgrowth/standards/technical_report/en/index.html
@@ -91,6 +91,15 @@ wfl_zscore_for_my_child = calculator.wfl(\
 wfl_zscore_for_my_child = calculator.zscore_for_measurement('wfl',\
     my_child['weight'], valid_age, valid_gender, my_child['height'])
 
+EXCEPTIONS
+
+caller should watch for:
+    AssertionError raised when caller provides inappropriate parameters
+as well as more specific errors (all subclasses of RuntimeError):
+    InvalidMeasurement raised when measurement is invalid for requested indicator
+    InvalidAge raised when age is invalid for requested indicator
+    DataNotFound raised when WHO/CDC data is not found for the requested observation (e.g., box-cox, median, coeffeciant of vairance for age)
+    DataError raised when an error occurs while loading WHO/CDC data into memory
 
 TESTING
 

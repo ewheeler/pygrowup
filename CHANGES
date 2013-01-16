@@ -1,0 +1,13 @@
+Version 0.7.0 released 2013-01-17
+
+* Add WHO standards for head-circumference-for-age
+* Add WHO standards for body-mass-index-for-age
+* Add additional WHO standards for ages 0-13 weeks for wfa, lhfa, hfcfa, and bmifa
+* Extract tests into proper tests.py, runnable by nose
+* Major refactor of pygrowup module
+* Change import behavior, class names, and usage
+* Better error checking, sensible exceptions, and improved exception handling
+* Intelligently switch indicator tables when appropriate (e.g., change table lookup from whl to wfh if child is too tall for wfl)
+* Reformat tables when loading into memory for faster lookup performance
+* Use python's logging instead of print statements
+* Various bug fixes

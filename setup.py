@@ -8,11 +8,11 @@ from setuptools import setup, find_packages
 
 setup(
     name="pygrowup",
-    version="0.7.0",
+    version=__import__('pygrowup').get_version().replace(' ', '-'),
     license="BSD",
 
-    packages = find_packages(),
-    include_package_data = True,
+    packages=find_packages(),
+    include_package_data=True,
 
     author="Evan Wheeler",
     author_email="evanmwheeler@gmail.com",

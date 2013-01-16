@@ -23,7 +23,7 @@ setup(
     description="Calculate z-scores of anthropometric measurements based on WHO and CDC child growth standards",
     long_description=open('README').read(),
     url="http://github.com/ewheeler/pygrowup",
-    download_url="https://github.com/ewheeler/pygrowup/archive/master.zip",
+    download_url="https://github.com/ewheeler/pygrowup/archive/0.7b0.tar.gz",
     classifiers=[
         'Intended Audience :: Healthcare Industry',
         'Programming Language :: Python :: 2.5',

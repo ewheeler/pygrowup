@@ -1,71 +1,170 @@
+========
+pygrowup
+========
+
 pygrowup calculates z-scores for the following anthropometric indicators:
-    weight-for-age, length/height-for-age, and weight-for-length/height
+
+* weight-for-age
+
+* length/height-for-age
+
+* weight-for-length/height
+
+* head-circumference-for-age
+
+* body-mass-index-for-age
+
 based on the WHO Child Growth Standards:
-    http://www.who.int/childgrowth/standards/en/
-    http://www.who.int/entity/childgrowth/standards/technical_report/en/index.html
+* http://www.who.int/childgrowth/standards/en/
+* http://www.who.int/entity/childgrowth/standards/technical_report/en/index.html
+
+and can optionally use CDC growth standards:
+* http://www.cdc.gov/growthcharts
 
 pygrowup avoids floating-point operations to eliminate the unwanted rounding
 that muddles the precision of some of the igrowup implementations:
-    http://docs.sun.com/source/806-3568/ncg_goldberg.html
-
-REQUIREMENTS:
-Python 2.5 or later
-Additionally, Python 2.5 requires installation of simplejson library:
-    http://pypi.python.org/pypi/simplejson
-
-INSTALLATION:
-pip install pygrowup
-
-EXAMPLE USAGE:
-from pygrowup.pygrowup import * 
-
-# Height adjustments are part of the WHO specification (see section 5.1)
-# to correct for recumbent vs standing measurements,
-# but none of the existing software seems to implement this.
-# default is false so values are closer to those produced
-# by igrowup software
-#
-# WHO specs include adjustments (see Chapter 7) to z-scores of weight-based
-# indicators that are greater than +/- 3 SDs. These adjustments
-# correct for right skewness and avoid making assumptions about
-# the distribution of data beyond the limits of the observed values.
-#
-# However, when calculating z-scores in a live data collection 
-# situation, z-scores greater than +/- 3 SDs are likely to indicate
-# data entry or anthropometric measurement errors and should not
-# be adjusted. Instead, these large z-scores should be used to
-# identify poor data quality and/or entry errors.
-# These z-score adjustments are appropriate only when there
-# is confidence in data quality. 
-cg = childgrowth(adjust_height_data=False, adjust_weight_scores=False)
-
-my_child = {'date_of_birth' : '100309', 'sex' : 'male',\
-            'weight' : '8.0', 'height' : '69.5'}
-
-# use helper functions for formatting data
-
-# transform '100309' into '2009-03-10'
-valid_date = cg.helpers.get_good_date(my_child['date_of_birth'])
-
-# transform 'male' into 'M'
-valid_gender = cg.helpers.get_good_sex('male')
-
-# calculate 9 months from '2009-03-10'
-valid_age = cg.helpers.date_to_age_in_months(valid_date)
+* http://docs.sun.com/source/806-3568/ncg_goldberg.html
 
 
-# call zscore_for_measurement(indicator, measurement,\
-#    age_in_months, gender, height)
-# optional height parameter is only necessary for weight-for-height
+REQUIREMENTS
+============
 
-# calculate length/height-for-age zscore
-lhfa_zscore_for_my_child = cg.zscore_for_measurement('lhfa',\
-    mychild['height'], valid_age, valid_gender)
+* Python 2.5 or later
+* Additionally, Python 2.5 requires installation of http://pypi.python.org/pypi/simplejson
 
-# calculate weight-for-age zscore
-wfa_zscore_for_my_child = cg.zscore_for_measurement('wfa',\
-    mychild['weight'], valid_age, valid_gender)
 
-# calculate weight-for-length zscore
-wfl_zscore_for_my_child = cg.zscore_for_measurement('wfl',\
-    mychild['weight'], valid_age, valid_gender, mychild['height'])
+INSTALLATION
+============
+`pip install pygrowup`
+
+
+EXAMPLE USAGE
+=============
+
+Typical usage might look like this::
+
+    #!/usr/bin/env python
+
+    from pygrowup import Calculator
+    # helpers contains optional utilities for formatting dates, etc
+    from pygrowup import helpers
+
+    # Height adjustments are part of the WHO specification (see section 5.1)
+    # to correct for recumbent vs standing measurements,
+    # but none of the existing software seems to implement this.
+    # default is false so values are closer to those produced
+    # by igrowup software
+    #
+    # WHO specs include adjustments (see Chapter 7) to z-scores of weight-based
+    # indicators that are greater than +/- 3 SDs. These adjustments
+    # correct for right skewness and avoid making assumptions about
+    # the distribution of data beyond the limits of the observed values.
+    #
+    # However, when calculating z-scores in a live data collection
+    # situation, z-scores greater than +/- 3 SDs are likely to indicate
+    # data entry or anthropometric measurement errors and should not
+    # be adjusted. Instead, these large z-scores should be used to
+    # identify poor data quality and/or entry errors.
+    # These z-score adjustments are appropriate only when there
+    # is confidence in data quality.
+    #
+    # In this example, Calculator is initialized with its default values
+    # (i.e., ``calculator = Calculator()`` would do the same thing).
+    # The ``include_cdc`` option will enable CDC measurements for children >5 years.
+    calculator = Calculator(adjust_height_data=False, adjust_weight_scores=False,
+                           include_cdc=False, logger_name='pygrowup',
+                           log_level='INFO')
+
+    # for a timeless example, lets pick a birthdate nine months ago
+    import datetime
+    great_day = datetime.datetime.utcnow().date()
+    nine_months_ago = great_day - datetime.timedelta(days=(9 * 30.4374))
+
+    # nine months ago in an odd, ambiguous string format
+    dob = nine_months_ago.strftime("%d%m%y")
+
+    my_child = {'date_of_birth' : dob, 'sex' : 'male', 'weight' : '8.0', 'height' : '69.5'}
+
+    # optionally use helper functions for formatting data
+
+    # transform something like '100309' into '2009-03-10'
+    valid_date = helpers.get_good_date(my_child['date_of_birth'])
+
+    # transform 'male' into 'M'
+    valid_gender = helpers.get_good_sex('male')
+
+    # calculate 9 months from valid_date
+    valid_age = helpers.date_to_age_in_months(valid_date[1])
+
+
+    # calculate length/height-for-age zscore
+    lhfa_zscore_for_my_child = calculator.lhfa(my_child['height'], valid_age, valid_gender)
+
+    # calculate weight-for-age zscore
+    wfa_zscore_for_my_child = calculator.wfa(my_child['weight'], valid_age, valid_gender)
+
+    # calculate weight-for-length zscore
+    # optional height parameter is only necessary for weight-for-height
+    # and weight-for-length
+    wfl_zscore_for_my_child = calculator.wfl(my_child['weight'], valid_age, valid_gender, my_child['height'])
+
+    # Note: for backwards compatibility you may still make calls to:
+    wfl_zscore_for_my_child = calculator.zscore_for_measurement('wfl', my_child['weight'], valid_age, valid_gender, my_child['height'])
+
+
+EXCEPTIONS
+==========
+
+caller should watch for:
+
+* `AssertionError` raised when caller provides inappropriate parameters
+
+as well as more specific errors (all subclasses of `RuntimeError`):
+
+* `InvalidMeasurement` raised when measurement is invalid for requested indicator
+
+* `InvalidAge` raised when age is invalid for requested indicator
+
+* `DataNotFound` raised when WHO/CDC data is not found for the requested observation (e.g., box-cox, median, coeffeciant of vairance for age)
+
+* `DataError` raised when an error occurs while loading WHO/CDC data into memory
+
+
+TESTING
+=======
+
+install nose to execute tests:
+`pip install nose`
+
+the included tests use example anthropometric data taken from
+demonstration data shipped with WHO's igrowup software.
+pygrowup performs the same calculations and compares the results
+to the WHO results.
+please see the sofware licence agreement for WHO's igrowup, which
+is the souce of the test data files:
+http://www.who.int/childgrowth/software/license2.pdf
+
+currently, 5 cases fail to produce results within 1 standard deviation
+of the WHO resuts. I believe these discrepencies are due to WHO's use
+of floating point arithmetic in their igrowup software, which leads to less
+precise calculations compared to pygrowup. In the absence of any other
+trusted test data, please be aware that no claims are made to the
+accuracy or reliability of pygroup's calculations.
+
+to run the tests:
+`$ nosetests tests.py`
+
+
+DEVELOPING
+==========
+
+The source WHO .txt tables can be easily converted to json with the help of
+two amazing python utilities:
+
+* The Pyed Piper https://code.google.com/p/pyp/
+
+* csvkit http://pypi.python.org/pypi/csvkit
+
+heres an example one-liner that changes the source .txt from tsv
+to csv (with `pyp`) and then to json (with csvkit's `csvjson`)
+`$ cat bmi_girls_2_5_zscores.txt | pyp "p.replace('\t', ',')" | csvjson > bmifa_girls_2_5_zscores.json`

@@ -1,0 +1,5 @@
+* include reformatted WHO/CDC tables to avoid reformatting each time Calculator is instantiated
+* allow caller to specify age in days, weeks, or years (instead of just months)
+* allow caller to specify type of return value (e.g., return floats or strings instead of decimal.Decimal)
+* refactor table loading to load all tables in tables dir rather than tables explicitly listed in pygrowup.py
+* improve documentation

@@ -144,7 +144,7 @@ please see the sofware licence agreement for WHO's igrowup, which
 is the souce of the test data files:
 http://www.who.int/childgrowth/software/license2.pdf
 
-currently, 5 cases fail to produce results within 1 standard deviation
+currently, 4 cases fail to produce results within 1 standard deviation
 of the WHO resuts. I believe these discrepencies are due to WHO's use
 of floating point arithmetic in their igrowup software, which leads to less
 precise calculations compared to pygrowup. In the absence of any other

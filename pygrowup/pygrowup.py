@@ -43,7 +43,7 @@ class Observation(object):
 
     @property
     def age_in_weeks(self):
-        return ((self.age * D(30.4374)) / D(7))
+        return ((self.age * D('30.4374')) / D(7))
 
     @property
     def rounded_height(self):

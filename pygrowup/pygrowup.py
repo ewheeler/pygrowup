@@ -444,8 +444,8 @@ class Calculator(object):
                         self.context.multiply(box_cox_power,
                                               coefficient_of_variance_for_age), D(sd)))
                     exponent = self.context.divide(D(1), box_cox_power)
-                    pow = math.pow(base, exponent)
-                    stdev = self.context.multiply(median_for_age, D(str(pow)))
+                    power = math.pow(base, exponent)
+                    stdev = self.context.multiply(median_for_age, D(str(power)))
                     return D(stdev)
 
                 if (zscore > D(3)):

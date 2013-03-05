@@ -3,7 +3,7 @@ from pygrowup import Calculator
 __version_info__ = {
     'major': 0,
     'minor': 7,
-    'micro': 5,
+    'micro': 6,
     'releaselevel': 'beta',
     'serial': 0
 }

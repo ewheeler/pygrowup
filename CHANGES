@@ -1,8 +1,13 @@
+Version 0.7.7b0 released 2013-05-16
+* Fix bug where bmifa raises error if age is exactly 3 months
+
+Version 0.7.6b0 released 2013-03-05
+* Fix bug where float was being cast to decimal
+
 Version 0.7.5b0 released 2013-01-28
 * Corrections to some CDC data tables for girls
 
 Version 0.7b0 released 2013-01-17
-
 * Add WHO standards for head-circumference-for-age
 * Add WHO standards for body-mass-index-for-age
 * Add additional WHO standards for ages 0-13 weeks for wfa, lhfa, hfcfa, and bmifa

@@ -137,9 +137,8 @@ class Observation(object):
         elif self.indicator in ["bmifa"]:
             if self.age > D(240):
                 raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
-            elif self.age <= D(3):
-                if self.age_in_weeks <= D(13):
-                    self.table_age = "0_13"
+            elif self.age <= D(3) and self.age_in_weeks <= D(13):
+                self.table_age = "0_13"
             elif self.age < D(24):
                 self.table_age = '0_2'
             elif self.age >= D(24) and self.age <= D(60):
@@ -166,10 +165,15 @@ class Observation(object):
                     self.table_age = '2_5'
                 else:
                     raise exceptions.DataNotFound()
-        return "%(table_indicator)s_%(table_sex)s_%(table_age)s" %\
-               {"table_indicator": self.table_indicator,
-               "table_sex": self.table_sex,
-               "table_age": self.table_age}
+        table = "%(table_indicator)s_%(table_sex)s_%(table_age)s" %\
+                {"table_indicator": self.table_indicator,
+                "table_sex": self.table_sex,
+                "table_age": self.table_age}
+        self.logger.debug(table)
+        # raise if any table name parts have not been resolved
+        if not all([self.table_indicator, self.table_sex, self.table_age]):
+            raise exceptions.DataError()
+        return table
 
 
 class Calculator(object):

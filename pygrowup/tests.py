@@ -100,5 +100,23 @@ def test_generator():
                 continue
             yield compare_result, who
 
+
+def test_bmifa_bug():
+    calc = pygrowup.Calculator(include_cdc=True, log_level='DEBUG')
+    # test to verify fix of https://github.com/ewheeler/pygrowup/issues/6
+    # where age of exactly 3 months would not be resolved to either
+    # 0-13 week table or to 0-2 years table
+    does_not_raise = calc.zscore_for_measurement('bmifa', 32.0,
+                                                 3, 'F', 50)
+    assert does_not_raise == D('7.41')
+
+    should_use_bmifa_girls_0_13 = calc.zscore_for_measurement('bmifa', 32.0,
+                                                              2.9, 'F', 50)
+    assert should_use_bmifa_girls_0_13 == D('7.53')
+
+    should_use_bmifa_girls_0_2 = calc.zscore_for_measurement('bmifa', 32.0,
+                                                             3.1, 'F', 50)
+    assert should_use_bmifa_girls_0_2 == D('7.41')
+
 if __name__ == '__main__':
     nose.main()

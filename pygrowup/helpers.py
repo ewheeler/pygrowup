@@ -1,18 +1,19 @@
 import re
 import datetime
+import logging
 
 
 def get_good_date(date, delimiter=False):
     # TODO parameter to choose formating
     # e.g., DDMMYY vs YYMMDD etc
-    #print 'getting good date...'
-    #print date
+    logging.debug('getting good date...')
+    logging.debug(date)
     delimiters = r"[./\\-]+"
     if delimiter:
         # expecting DDMMYY
         Allsect = re.split(delimiters, date)
     else:
-        #print 'no delimiter'
+        logging.debug('no delimiter')
         if len(date) == 6:
             # assume DDMMYY
             Allsect = [date[:2], date[2:4], date[4:]]
@@ -33,13 +34,13 @@ def get_good_date(date, delimiter=False):
             return None, None
 
     if Allsect is not None:
-        #print Allsect
+        logging.debug(Allsect)
         year = Allsect[2]
         month = Allsect[1]
         day = Allsect[0]
-        #print 'year ' + str(year)
-        #print 'month ' + str(month)
-        #print 'day ' + str(day)
+        logging.debug('year ' + str(year))
+        logging.debug('month ' + str(month))
+        logging.debug('day ' + str(day))
 
         # make sure we have a REAL day
         if month.isdigit():
@@ -67,15 +68,15 @@ def get_good_date(date, delimiter=False):
         if len(day) < 2:
             day = "0%s" % day
 
-        #print 'year ' + str(year)
-        #print 'month ' + str(month)
-        #print 'day ' + str(day)
+        logging.debug('year ' + str(year))
+        logging.debug('month ' + str(month))
+        logging.debug('day ' + str(day))
         # return ISO string for human consumption;
         # datetime.date for django consumption
         good_date_str = "%s-%s-%s" % (year, month, day)
-        #print good_date_str
+        logging.debug(good_date_str)
         good_date_obj = datetime.date(int(year), int(month), int(day))
-        #print good_date_obj
+        logging.debug(good_date_obj)
         return good_date_str, good_date_obj
 
 
@@ -114,4 +115,4 @@ def age_to_estimated_bday(age_in_months):
         else:
             return None
     except Exception, e:
-        print e
+        logging.info(e)

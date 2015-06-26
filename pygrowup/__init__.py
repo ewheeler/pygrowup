@@ -1,9 +1,9 @@
-from pygrowup import Calculator
+from .pygrowup import Calculator
 
 __version_info__ = {
     'major': 0,
-    'minor': 7,
-    'micro': 7,
+    'minor': 8,
+    'micro': 0,
     'releaselevel': 'beta',
     'serial': 0
 }

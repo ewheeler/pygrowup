@@ -29,8 +29,8 @@ that muddles the precision of some of the igrowup implementations:
 REQUIREMENTS
 ============
 
-* Python 2.5 or later
-* Additionally, Python 2.5 requires installation of http://pypi.python.org/pypi/simplejson
+* Python 2.7.x, Python 3.x or later
+* Additionally requires https://pypi.python.org/pypi/six
 
 
 INSTALLATION

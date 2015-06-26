@@ -1,29 +1,24 @@
 #!/usr/bin/env python
 # vim: ai ts=4 sts=4 et sw=4
-from __future__ import with_statement
-
 import os
 import math
 import decimal
 import logging
+import json
 from decimal import Decimal as D
 
-import exceptions
+import six
 
-try:
-    # Python 2.6 includes json library
-    import json
-except ImportError:
-    # NOTE Python 2.5 requires installation of simplejson library
-    # http://pypi.python.org/pypi/simplejson
-    import simplejson as json
+from . import exceptions
+
 
 # TODO is this the best way to get this file's directory?
 module_dir = os.path.split(os.path.abspath(__file__))[0]
 
 
 class Observation(object):
-    def __init__(self, indicator, measurement, age_in_months, sex, height, american, logger_name):
+    def __init__(self, indicator, measurement, age_in_months, sex,
+                 height, american, logger_name):
         self.logger = logging.getLogger(logger_name)
 
         self.indicator = indicator
@@ -81,7 +76,8 @@ class Observation(object):
             scores = table.get(closest_height)
             if scores is not None:
                 return scores
-            raise exceptions.DataNotFound("SCORES NOT FOUND BY HEIGHT: %s => %s" % (self.height, closest_height))
+            raise exceptions.DataNotFound("SCORES NOT FOUND BY HEIGHT: %s => "
+                                          "%s" % (self.height, closest_height))
 
         elif self.indicator in ["lhfa", "wfa", "bmifa", "hcfa"]:
             if self.age_in_weeks <= D(13):
@@ -89,12 +85,16 @@ class Observation(object):
                 scores = table.get(closest_week)
                 if scores is not None:
                     return scores
-                raise exceptions.DataNotFound("SCORES NOT FOUND BY WEEK: %s => %s" % (str(self.age_in_weeks), closest_week))
+                raise exceptions.DataNotFound("SCORES NOT FOUND BY WEEK: %s => "
+                                              " %s" % (str(self.age_in_weeks),
+                                                       closest_week))
             closest_month = str(int(math.floor(self.age)))
             scores = table.get(closest_month)
             if scores is not None:
                 return scores
-            raise exceptions.DataNotFound("SCORES NOT FOUND BY MONTH: %s => %s" % (str(self.age), closest_month))
+            raise exceptions.DataNotFound("SCORES NOT FOUND BY MONTH: %s =>"
+                                          " %s" % (str(self.age),
+                                                   closest_month))
 
     def resolve_table(self):
         """ Choose a WHO/CDC table to use, making adjustments
@@ -167,8 +167,8 @@ class Observation(object):
                     raise exceptions.DataNotFound()
         table = "%(table_indicator)s_%(table_sex)s_%(table_age)s" %\
                 {"table_indicator": self.table_indicator,
-                "table_sex": self.table_sex,
-                "table_age": self.table_age}
+                 "table_sex": self.table_sex,
+                 "table_age": self.table_age}
         self.logger.debug(table)
         # raise if any table name parts have not been resolved
         if not all([self.table_indicator, self.table_sex, self.table_age]):
@@ -197,7 +197,8 @@ class Calculator(object):
             new_dict.update({d[field_name]: d})
         setattr(self, table_name, new_dict)
 
-    def __init__(self, adjust_height_data=False, adjust_weight_scores=False, include_cdc=False, logger_name='pygrowup', log_level="INFO"):
+    def __init__(self, adjust_height_data=False, adjust_weight_scores=False,
+                 include_cdc=False, logger_name='pygrowup', log_level="INFO"):
         self.logger = logging.getLogger(logger_name)
         self.logger.setLevel(getattr(logging, log_level))
 
@@ -252,9 +253,12 @@ class Calculator(object):
         # deviation has been fudged for the purpose of this tool.
 
         CDC_tables = [
-            'lhfa_boys_2_20_zscores.cdc.json',     'lhfa_girls_2_20_zscores.cdc.json',
-            'wfa_boys_2_20_zscores.cdc.json',      'wfa_girls_2_20_zscores.cdc.json',
-            'bmifa_boys_2_20_zscores.cdc.json',    'bmifa_girls_2_20_zscores.cdc.json', ]
+            'lhfa_boys_2_20_zscores.cdc.json',
+            'lhfa_girls_2_20_zscores.cdc.json',
+            'wfa_boys_2_20_zscores.cdc.json',
+            'wfa_girls_2_20_zscores.cdc.json',
+            'bmifa_boys_2_20_zscores.cdc.json',
+            'bmifa_girls_2_20_zscores.cdc.json', ]
 
         # TODO is this the best way to find the tables?
         table_dir = os.path.join(module_dir, 'tables')
@@ -311,7 +315,7 @@ class Calculator(object):
 
     def zscore_for_measurement(self, indicator, measurement, age_in_months, sex, height=None):
         assert sex is not None
-        assert isinstance(sex, basestring)
+        assert isinstance(sex, six.string_types)
         assert sex.upper() in ["M", "F"]
         assert age_in_months is not None
         assert indicator is not None
@@ -325,7 +329,8 @@ class Calculator(object):
         if y <= D(0):
             # reject measurements 0 or less because the math won't work.
             # and that would be an impossibly shaped human.
-            raise exceptions.InvalidMeasurement('measurement must be greater than zero')
+            raise exceptions.InvalidMeasurement('measurement must be greater'
+                                                ' than zero')
         self.logger.debug("MEASUREMENT: %d" % y)
 
         obs = Observation(indicator, measurement, age_in_months, sex, height,
@@ -390,7 +395,7 @@ class Calculator(object):
 
         # TODO this is probably unneccesary, as it should work out to be the
         # same as the above z-score calculation
-        #if indicator == "lhfa":
+        # if indicator == "lhfa":
         #    numerator_lhfa = self.context.subtract(D(y), median_for_age)
         #    denomenator_lhfa = self.context.multiply(median_for_age,\
         #        coefficient_of_variance_for_age)
@@ -438,7 +443,7 @@ class Calculator(object):
                 #           |
                 #           |_
                 def calc_stdev(sd):
-                    ### e.g.,
+                    #   e.g.,
                     #
                     #   SD3neg = M(t)[1 + L(t) * S(t) * (-3)]^ 1/L(t)
                     #   SD2pos = M(t)[1 + L(t) * S(t) * (2)]^ 1/L(t)
@@ -453,13 +458,13 @@ class Calculator(object):
                     return D(stdev)
 
                 if (zscore > D(3)):
-                    print "Z greater than 3"
+                    logging.info("Z greater than 3")
                     # TODO measure performance of lookup vs calculation
                     # calculate for now so we have greater precision
 
                     # get cutoffs from z-scores dict
-                    #SD2pos = D(zscores.get("SD2"))
-                    #SD3pos = D(zscores.get("SD3"))
+                    # SD2pos = D(zscores.get("SD2"))
+                    # SD3pos = D(zscores.get("SD3"))
 
                     # calculate SD
                     SD2pos_c = calc_stdev(2)
@@ -469,7 +474,7 @@ class Calculator(object):
                     SD23pos_c = SD3pos_c - SD2pos_c
 
                     # compute final z-score
-                    #zscore = D(3) + ((y - SD3pos_c)/SD23pos_c)
+                    # zscore = D(3) + ((y - SD3pos_c)/SD23pos_c)
                     sub = self.context.subtract(D(y), SD3pos_c)
                     div = self.context.divide(sub, SD23pos_c)
                     zscore = self.context.add(D(3), div)
@@ -477,8 +482,8 @@ class Calculator(object):
 
                 if (zscore < D(-3)):
                     # get cutoffs from z-scores dict
-                    #SD2neg = D(zscores.get("SD2neg"))
-                    #SD3neg = D(zscores.get("SD3neg"))
+                    # SD2neg = D(zscores.get("SD2neg"))
+                    # SD3neg = D(zscores.get("SD3neg"))
 
                     # calculate SD
                     SD2neg_c = calc_stdev(-2)
@@ -488,7 +493,7 @@ class Calculator(object):
                     SD23neg_c = SD2neg_c - SD3neg_c
 
                     # compute final z-score
-                    #zscore = D(-3) + ((y - SD3neg_c)/SD23neg_c)
+                    # zscore = D(-3) + ((y - SD3neg_c)/SD23neg_c)
                     sub = self.context.subtract(D(y), SD3neg_c)
                     div = self.context.divide(sub, SD23neg_c)
                     zscore = self.context.add(D(-3), div)

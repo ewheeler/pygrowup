@@ -114,5 +114,5 @@ def age_to_estimated_bday(age_in_months):
             return estimate
         else:
             return None
-    except Exception, e:
+    except Exception as e:
         logging.info(e)

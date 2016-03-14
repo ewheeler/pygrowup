@@ -20,7 +20,7 @@ setup(
     description="Calculate z-scores of anthropometric measurements based on WHO and CDC child growth standards",
     long_description=open('README').read(),
     url="http://github.com/ewheeler/pygrowup",
-    download_url="https://github.com/ewheeler/pygrowup/archive/0.8.1.tar.gz",
+    download_url="https://github.com/ewheeler/pygrowup/archive/0.8.2.tar.gz",
     install_requires=[
         "six",
     ],

@@ -131,9 +131,9 @@ class Observation(object):
                 if self.age_in_weeks <= D(13):
                     self.table_age = "0_13"
             if self.american and self.age >= D(24):
-                if self.indicator == "hcfa":
-                    raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
                 self.table_age = "2_20"
+            if self.indicator == "hcfa" and self.age > D(60):
+                raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
         elif self.indicator in ["bmifa"]:
             if self.age > D(240):
                 raise exceptions.InvalidAge('TOO OLD: %d' % self.age)

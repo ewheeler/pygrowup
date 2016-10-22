@@ -131,9 +131,9 @@ class Observation(object):
                 self.table_age = "0_13"
             elif self.american and self.age >= D(24):
                 self.table_age = "2_20"
-            elif self.indicator == "hcfa" and self.age > D(60):
+            elif self.indicator == "hcfa" and self.age >= D(61):
                 raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
-            elif not self.american and self.age > D(60) and self.indicator == "lhfa":
+            elif not self.american and self.age >= D(61) and self.indicator == "lhfa":
                 self.table_indicator = "hfa"  # (that's what WHO calls it)
                 self.table_age = "5_19"
         elif self.indicator in ["bmifa"]:
@@ -143,9 +143,9 @@ class Observation(object):
                 self.table_age = "0_13"
             elif self.age < D(24):
                 self.table_age = '0_2'
-            elif self.age >= D(24) and self.age <= D(60):
+            elif self.age >= D(24) and self.age < D(61):
                 self.table_age = '2_5'
-            elif self.age > D(60):
+            elif self.age >= D(61):
                 # "american" means include CDC data -- prefer that over WHO if
                 # indicated.
                 self.table_age = '2_20' if self.american else "5_19"

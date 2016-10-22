@@ -120,5 +120,77 @@ def test_bmifa_bug():
                                                              3.1, 'F', 50)
     assert should_use_bmifa_girls_0_2 == D('7.41')
 
+
+def test_bmifa_for_older_children():
+    calc = pygrowup.Calculator(include_cdc=False)
+
+    # Try a young girl
+    # BMI of 13.9 is -1 z-score for 61 months, according to WHO
+    # (hfa at 104.8cm tall is z-score: -1 for 61 months)
+    our_result = calc.bmifa(measurement=13.9,
+                            age_in_months=61,
+                            sex="F",
+                            height=104.8)
+    expected = -1.0
+    diff = calc.context.subtract(D(expected), D(our_result))
+    assert(abs(diff) <= D('0.1'))
+
+    # Now try a girl on the other end of the age spectrum, 2 SDs up
+    our_result = calc.bmifa(measurement=29.7,
+                            age_in_months=227,
+                            sex="F",
+                            height=176.2)
+    expected = 2.0
+    diff = calc.context.subtract(D(expected), D(our_result))
+    assert(abs(diff) <= D('0.1'))
+
+
+def test_bmifa_for_older_children():
+    calc = pygrowup.Calculator(include_cdc=False)
+
+    # Try a young girl
+    # BMI of 13.9 is -1 z-score for 61 months, according to WHO
+    # (hfa at 104.8cm tall is z-score: -1 for 61 months)
+    our_result = calc.bmifa(measurement=13.9,
+                            age_in_months=61,
+                            sex="F",
+                            height=104.8)
+    expected = -1.0
+    diff = calc.context.subtract(D(expected), D(our_result))
+    assert(abs(diff) <= D('0.1'))
+
+    # Now try a girl on the other end of the age spectrum, 2 SDs up
+    our_result = calc.bmifa(measurement=29.7,
+                            age_in_months=227,
+                            sex="F",
+                            height=176.2)
+    expected = 2.0
+    diff = calc.context.subtract(D(expected), D(our_result))
+    assert(abs(diff) <= D('0.1'))
+
+
+def test_lhfa_for_older_children():
+    calc = pygrowup.Calculator(include_cdc=False)
+
+    # Try a young girl
+    # hfa at 104.8cm tall is z-score: -1 for 61 months)
+    our_result = calc.lhfa(measurement=104.8,
+                           age_in_months=61,
+                           sex="F",
+                           )
+    expected = -1.0
+    diff = calc.context.subtract(D(expected), D(our_result))
+    assert(abs(diff) <= D('0.1'))
+
+    # Now try a girl on the other end of the age spectrum, 2 SDs up
+    our_result = calc.lhfa(measurement=176.2,
+                           age_in_months=227,
+                           sex="F",
+                           )
+    expected = 2.0
+    diff = calc.context.subtract(D(expected), D(our_result))
+    assert(abs(diff) <= D('0.1'))
+
+
 if __name__ == '__main__':
     nose.main()

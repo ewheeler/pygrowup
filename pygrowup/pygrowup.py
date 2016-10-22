@@ -127,13 +127,15 @@ class Observation(object):
         # and CDC goes unused before 24mos
         if self.indicator in ["wfa", "lhfa", "hcfa"]:
             self.table_age = "0_5"
-            if self.age <= D(3):
-                if self.age_in_weeks <= D(13):
-                    self.table_age = "0_13"
-            if self.american and self.age >= D(24):
+            if self.age_in_weeks <= D(13):
+                self.table_age = "0_13"
+            elif self.american and self.age >= D(24):
                 self.table_age = "2_20"
-            if self.indicator == "hcfa" and self.age > D(60):
+            elif self.indicator == "hcfa" and self.age > D(60):
                 raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
+            elif not self.american and self.age > D(60) and self.indicator == "lhfa":
+                self.table_indicator = "hfa"  # (that's what WHO calls it)
+                self.table_age = "5_19"
         elif self.indicator in ["bmifa"]:
             if self.age > D(240):
                 raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
@@ -143,8 +145,10 @@ class Observation(object):
                 self.table_age = '0_2'
             elif self.age >= D(24) and self.age <= D(60):
                 self.table_age = '2_5'
-            elif self.age >= D(24) and self.age > D(60):
-                self.table_age = '2_20'
+            elif self.age > D(60):
+                # "american" means include CDC data -- prefer that over WHO if
+                # indicated.
+                self.table_age = '2_20' if self.american else "5_19"
             else:
                 raise exceptions.DataNotFound()
         else:
@@ -247,6 +251,13 @@ class Calculator(object):
             'bmifa_boys_0_2_zscores.json',  'bmifa_girls_0_2_zscores.json',
             'bmifa_boys_2_5_zscores.json',  'bmifa_girls_2_5_zscores.json']
 
+        # These are WHO tables for older children, superseded in part by the
+        # CDC tables below, for those that opt to include them
+        WHO_extra_tables = [
+            "bmifa_boys_5_19_zscores.json", "bmifa_girls_5_19_zscores.json",
+            "hfa_boys_5_19_zscores.json", "hfa_girls_5_19_zscores.json",
+            ]
+
         # load CDC growth standards
         # http://www.cdc.gov/growthcharts/
         # CDC csv files have been converted to JSON, and the third standard
@@ -264,7 +275,9 @@ class Calculator(object):
         table_dir = os.path.join(module_dir, 'tables')
         tables_to_load = WHO_tables
         if self.include_cdc:
-            tables_to_load = tables_to_load + CDC_tables
+            tables_to_load += CDC_tables
+        else:
+            tables_to_load += WHO_extra_tables
         for table in tables_to_load:
             table_file = os.path.join(table_dir, table)
             with open(table_file, 'r') as f:

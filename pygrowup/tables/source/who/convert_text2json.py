@@ -15,7 +15,7 @@ def convert_text2json(source_path, output_path=None):
     reader = csv.DictReader(open(source_path), delimiter="\t")
     data = [row for row in reader]
     with open(output_path, "w") as output:
-        print(json.dumps(data), file=output)
+        print(json.dumps(data, sort_keys=True, indent=4), file=output)
     print("Done output to %s" % output_path)
 
 

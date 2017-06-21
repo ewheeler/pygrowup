@@ -192,5 +192,28 @@ def test_lhfa_for_older_children():
     assert(abs(diff) <= D('0.1'))
 
 
+def test_wfa_for_older_children():
+    calc = pygrowup.Calculator(include_cdc=False)
+
+    # Try a young girl
+    # wfa at 16kg is z-score: -1 for 61 months)
+    our_result = calc.wfa(measurement=16,
+                          age_in_months=61,
+                          sex="F",
+                          )
+    expected = -1.0
+    diff = calc.context.subtract(D(expected), D(our_result))
+    assert(abs(diff) <= D('0.1'))
+
+    # Now try a girl on the other end of the age spectrum, 2 SDs up
+    our_result = calc.wfa(measurement=47,
+                          age_in_months=120,
+                          sex="F",
+                          )
+    expected = 2.0
+    diff = calc.context.subtract(D(expected), D(our_result))
+    assert(abs(diff) <= D('0.1'))
+
+
 if __name__ == '__main__':
     nose.main()

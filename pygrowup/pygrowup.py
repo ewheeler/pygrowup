@@ -122,10 +122,9 @@ class Observation(object):
         if self.sex == 'F':
             self.table_sex = 'girls'
 
-        # weight for age has only one table per sex,
-        # as does head circumference for age
+        # head circumference for age has only one table per sex
         # and CDC goes unused before 24mos
-        if self.indicator in ["wfa", "lhfa", "hcfa"]:
+        if self.indicator in ["lhfa", "hcfa"]:
             self.table_age = "0_5"
             if self.age_in_weeks <= D(13):
                 self.table_age = "0_13"
@@ -136,6 +135,25 @@ class Observation(object):
             elif not self.american and self.age >= D(61) and self.indicator == "lhfa":
                 self.table_indicator = "hfa"  # (that's what WHO calls it)
                 self.table_age = "5_19"
+        elif self.indicator == "wfa":
+            if self.american:
+                if self.age_in_weeks <= D(13):
+                    self.table_age = "0_13"  # WHO
+                elif self.age < D(24):
+                    self.table_age = "0_5"  # WHO
+                elif self.age <= D(240):
+                    self.table_age = "2_20"  # CDC
+                else:
+                    raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
+            else:
+                if self.age_in_weeks <= D(13):
+                    self.table_age = "0_13"
+                elif self.age <= D(60):
+                    self.table_age = "0_5"
+                elif self.age <= D(120):
+                    self.table_age = "5_10"
+                else:
+                    raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
         elif self.indicator in ["bmifa"]:
             if self.age > D(240):
                 raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
@@ -256,6 +274,7 @@ class Calculator(object):
         WHO_extra_tables = [
             "bmifa_boys_5_19_zscores.json", "bmifa_girls_5_19_zscores.json",
             "hfa_boys_5_19_zscores.json", "hfa_girls_5_19_zscores.json",
+            "wfa_boys_5_10_zscores.json", "wfa_girls_5_10_zscores.json",
             ]
 
         # load CDC growth standards

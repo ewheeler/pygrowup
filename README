@@ -14,6 +14,8 @@ pygrowup calculates z-scores for the following anthropometric indicators:
 
 * body-mass-index-for-age
 
+* mid-upper arm circumference-for-age
+
 based on the WHO Child Growth Standards:
 * http://www.who.int/childgrowth/standards/en/
 * http://www.who.int/entity/childgrowth/standards/technical_report/en/index.html

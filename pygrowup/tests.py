@@ -5,8 +5,9 @@ import codecs
 from decimal import Decimal as D
 
 import nose
+from nose.tools import raises
 
-from . import pygrowup
+from . import pygrowup, exceptions
 from six.moves import zip
 
 
@@ -189,6 +190,49 @@ def test_wfa_for_older_children():
     expected = 2.0
     diff = calc.context.subtract(D(expected), D(our_result))
     assert(abs(diff) <= D('0.1'))
+
+
+def test_acfa_for_values_in_range():
+    calc = pygrowup.Calculator(include_cdc=False)
+
+    # Try a young girl
+    our_result = calc.acfa(measurement=18.5,
+                           age_in_months=17,
+                           sex="F",
+                           )
+    expected = 3.0
+    diff = calc.context.subtract(D(expected), D(our_result))
+    assert(abs(diff) <= D('0.1'))
+
+    # Now try a girl on the other end of the age spectrum
+    our_result = calc.acfa(measurement=12.5,
+                           age_in_months=47,
+                           sex="F",
+                           )
+    expected = -3.0
+    diff = calc.context.subtract(D(expected), D(our_result))
+    assert(abs(diff) <= D('0.1'))
+
+    # Confirm that our alias works
+    alias_result = calc.muacfa(measurement=12.5,
+                               age_in_months=47,
+                               sex="F",
+                               )
+    assert (our_result == alias_result)
+
+
+@raises(exceptions.InvalidAge)
+def test_acfa_rejects_young_ages():
+    # 2 months is too young
+    calc = pygrowup.Calculator(include_cdc=False)
+    calc.acfa(measurement=18.5, age_in_months=2, sex="F",)
+
+
+@raises(exceptions.InvalidAge)
+def test_acfa_rejects_old_ages():
+    # Over 5 years is too old
+    calc = pygrowup.Calculator(include_cdc=False)
+    calc.acfa(measurement=18.5, age_in_months=61, sex="F",)
 
 
 if __name__ == '__main__':

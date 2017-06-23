@@ -79,7 +79,7 @@ class Observation(object):
             raise exceptions.DataNotFound("SCORES NOT FOUND BY HEIGHT: %s => "
                                           "%s" % (self.height, closest_height))
 
-        elif self.indicator in ["lhfa", "wfa", "bmifa", "hcfa"]:
+        elif self.indicator in ["lhfa", "wfa", "bmifa", "hcfa", "acfa"]:
             if self.age_in_weeks <= D(13):
                 closest_week = str(int(math.floor(self.age_in_weeks)))
                 scores = table.get(closest_week)
@@ -169,6 +169,13 @@ class Observation(object):
                 self.table_age = '2_20' if self.american else "5_19"
             else:
                 raise exceptions.DataNotFound()
+        elif self.indicator == "acfa":
+            if self.age < D(3):
+                raise exceptions.InvalidAge('TOO YOUNG: %d' % self.age)
+            elif self.age > D(60):
+                raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
+            self.table_age = "3_60"
+            self.table_indicator = "acfa"
         else:
             if self.table_age is None:
                 if self.table_indicator == 'wfl':
@@ -267,7 +274,9 @@ class Calculator(object):
             'hcfa_boys_0_13_zscores.json', 'hcfa_girls_0_13_zscores.json',
             'bmifa_boys_0_13_zscores.json', 'bmifa_girls_0_13_zscores.json',
             'bmifa_boys_0_2_zscores.json',  'bmifa_girls_0_2_zscores.json',
-            'bmifa_boys_2_5_zscores.json',  'bmifa_girls_2_5_zscores.json']
+            'bmifa_boys_2_5_zscores.json',  'bmifa_girls_2_5_zscores.json',
+            'acfa_boys_3_60_zscores.json', 'acfa_girls_3_60_zscores.json',
+        ]
 
         # These are WHO tables for older children, superseded in part by the
         # CDC tables below, for those that opt to include them
@@ -345,13 +354,25 @@ class Calculator(object):
                                            age_in_months=age_in_months,
                                            sex=sex, height=height)
 
+    def acfa(self, measurement=None, age_in_months=None, sex=None, height=None):
+        """ Calculate arm-circumference-for-age """
+        return self.zscore_for_measurement('acfa', measurement=measurement,
+                                           age_in_months=age_in_months,
+                                           sex=sex, height=height)
+
+    def muacfa(self, *args, **kwargs):
+        """MUAC alias for acfa"""
+        return self.acfa(*args, **kwargs)
+
     def zscore_for_measurement(self, indicator, measurement, age_in_months, sex, height=None):
         assert sex is not None
         assert isinstance(sex, six.string_types)
         assert sex.upper() in ["M", "F"]
         assert age_in_months is not None
         assert indicator is not None
-        assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa", "bmifa", "hcfa"]
+        assert indicator.lower() in [
+            "lhfa", "wfl", "wfh", "wfa", "bmifa", "hcfa", "acfa",
+            ]
         # reject blank measurements
         assert measurement not in ['', ' ', None]
 

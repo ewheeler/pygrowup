@@ -148,7 +148,7 @@ class Observation(object):
             else:
                 if self.age_in_weeks <= D(13):
                     self.table_age = "0_13"
-                elif self.age <= D(60):
+                elif self.age < D(61):
                     self.table_age = "0_5"
                 elif self.age <= D(120):
                     self.table_age = "5_10"

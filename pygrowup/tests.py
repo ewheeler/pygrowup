@@ -192,6 +192,19 @@ def test_wfa_for_older_children():
     assert(abs(diff) <= D('0.1'))
 
 
+def test_wfa_for_slightly_older_children():
+    """Test for a bug for children between 60 and 61 months"""
+    calc = pygrowup.Calculator(include_cdc=False)
+
+    our_result = calc.wfa(measurement=16,
+                          age_in_months=60.5,
+                          sex="F",
+                          )
+    expected = -0.9
+    diff = calc.context.subtract(D(expected), D(our_result))
+    assert(abs(diff) <= D('0.1'))
+
+
 def test_acfa_for_values_in_range():
     calc = pygrowup.Calculator(include_cdc=False)
 

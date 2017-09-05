@@ -1,4 +1,3 @@
-========
 pygrowup
 ========
 
@@ -24,6 +23,10 @@ and can optionally use CDC growth standards:
 pygrowup avoids floating-point operations to eliminate the unwanted rounding
 that muddles the precision of some of the igrowup implementations:
 * http://docs.sun.com/source/806-3568/ncg_goldberg.html
+
+thanks to GlobalStrategies for a JavaScript port!
+* https://github.com/GlobalStrategies/jsgrowup
+* published on npm as jsgrowup: https://www.npmjs.com/package/jsgrowup
 
 
 REQUIREMENTS

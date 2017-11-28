@@ -79,7 +79,7 @@ class Observation(object):
             raise exceptions.DataNotFound("SCORES NOT FOUND BY HEIGHT: %s => "
                                           "%s" % (self.height, closest_height))
 
-        elif self.indicator in ["lhfa", "wfa", "bmifa", "hcfa"]:
+        elif self.indicator in ["lhfa", "wfa", "bmifa", "hcfa", "acfa"]:
             if self.age_in_weeks <= D(13):
                 closest_week = str(int(math.floor(self.age_in_weeks)))
                 scores = table.get(closest_week)
@@ -122,18 +122,38 @@ class Observation(object):
         if self.sex == 'F':
             self.table_sex = 'girls'
 
-        # weight for age has only one table per sex,
-        # as does head circumference for age
+        # head circumference for age has only one table per sex
         # and CDC goes unused before 24mos
-        if self.indicator in ["wfa", "lhfa", "hcfa"]:
+        if self.indicator in ["lhfa", "hcfa"]:
             self.table_age = "0_5"
-            if self.age <= D(3):
+            if self.age_in_weeks <= D(13):
+                self.table_age = "0_13"
+            elif self.american and self.age >= D(24):
+                self.table_age = "2_20"
+            elif self.indicator == "hcfa" and self.age >= D(61):
+                raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
+            elif not self.american and self.age >= D(61) and self.indicator == "lhfa":
+                self.table_indicator = "hfa"  # (that's what WHO calls it)
+                self.table_age = "5_19"
+        elif self.indicator == "wfa":
+            if self.american:
+                if self.age_in_weeks <= D(13):
+                    self.table_age = "0_13"  # WHO
+                elif self.age < D(24):
+                    self.table_age = "0_5"  # WHO
+                elif self.age <= D(240):
+                    self.table_age = "2_20"  # CDC
+                else:
+                    raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
+            else:
                 if self.age_in_weeks <= D(13):
                     self.table_age = "0_13"
-            if self.american and self.age >= D(24):
-                if self.indicator == "hcfa":
+                elif self.age < D(61):
+                    self.table_age = "0_5"
+                elif self.age <= D(120):
+                    self.table_age = "5_10"
+                else:
                     raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
-                self.table_age = "2_20"
         elif self.indicator in ["bmifa"]:
             if self.age > D(240):
                 raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
@@ -141,12 +161,21 @@ class Observation(object):
                 self.table_age = "0_13"
             elif self.age < D(24):
                 self.table_age = '0_2'
-            elif self.age >= D(24) and self.age <= D(60):
+            elif self.age >= D(24) and self.age < D(61):
                 self.table_age = '2_5'
-            elif self.age >= D(24) and self.age > D(60):
-                self.table_age = '2_20'
+            elif self.age >= D(61):
+                # "american" means include CDC data -- prefer that over WHO if
+                # indicated.
+                self.table_age = '2_20' if self.american else "5_19"
             else:
                 raise exceptions.DataNotFound()
+        elif self.indicator == "acfa":
+            if self.age < D(3):
+                raise exceptions.InvalidAge('TOO YOUNG: %d' % self.age)
+            elif self.age > D(60):
+                raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
+            self.table_age = "3_60"
+            self.table_indicator = "acfa"
         else:
             if self.table_age is None:
                 if self.table_indicator == 'wfl':
@@ -245,7 +274,17 @@ class Calculator(object):
             'hcfa_boys_0_13_zscores.json', 'hcfa_girls_0_13_zscores.json',
             'bmifa_boys_0_13_zscores.json', 'bmifa_girls_0_13_zscores.json',
             'bmifa_boys_0_2_zscores.json',  'bmifa_girls_0_2_zscores.json',
-            'bmifa_boys_2_5_zscores.json',  'bmifa_girls_2_5_zscores.json']
+            'bmifa_boys_2_5_zscores.json',  'bmifa_girls_2_5_zscores.json',
+            'acfa_boys_3_60_zscores.json', 'acfa_girls_3_60_zscores.json',
+        ]
+
+        # These are WHO tables for older children, superseded in part by the
+        # CDC tables below, for those that opt to include them
+        WHO_extra_tables = [
+            "bmifa_boys_5_19_zscores.json", "bmifa_girls_5_19_zscores.json",
+            "hfa_boys_5_19_zscores.json", "hfa_girls_5_19_zscores.json",
+            "wfa_boys_5_10_zscores.json", "wfa_girls_5_10_zscores.json",
+            ]
 
         # load CDC growth standards
         # http://www.cdc.gov/growthcharts/
@@ -264,7 +303,9 @@ class Calculator(object):
         table_dir = os.path.join(module_dir, 'tables')
         tables_to_load = WHO_tables
         if self.include_cdc:
-            tables_to_load = tables_to_load + CDC_tables
+            tables_to_load += CDC_tables
+        else:
+            tables_to_load += WHO_extra_tables
         for table in tables_to_load:
             table_file = os.path.join(table_dir, table)
             with open(table_file, 'r') as f:
@@ -313,13 +354,25 @@ class Calculator(object):
                                            age_in_months=age_in_months,
                                            sex=sex, height=height)
 
+    def acfa(self, measurement=None, age_in_months=None, sex=None, height=None):
+        """ Calculate arm-circumference-for-age """
+        return self.zscore_for_measurement('acfa', measurement=measurement,
+                                           age_in_months=age_in_months,
+                                           sex=sex, height=height)
+
+    def muacfa(self, *args, **kwargs):
+        """MUAC alias for acfa"""
+        return self.acfa(*args, **kwargs)
+
     def zscore_for_measurement(self, indicator, measurement, age_in_months, sex, height=None):
         assert sex is not None
         assert isinstance(sex, six.string_types)
         assert sex.upper() in ["M", "F"]
         assert age_in_months is not None
         assert indicator is not None
-        assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa", "bmifa", "hcfa"]
+        assert indicator.lower() in [
+            "lhfa", "wfl", "wfh", "wfa", "bmifa", "hcfa", "acfa",
+            ]
         # reject blank measurements
         assert measurement not in ['', ' ', None]
 

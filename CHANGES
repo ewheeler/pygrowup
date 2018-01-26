@@ -1,3 +1,13 @@
+Version 1.0.0 released 2018-02-01
+* Refactor by [SPOON](http://www.spoonfoundation.org)
+* Employs precision based off of a child's age to the day-level
+  where possible (up to 5 years of age); the original rounds to nearest
+  completed month
+* There is no CDC-data-based option for the growth metrics (at least for now)
+* This package includes the more esoteric metrics (subscapular skinfold-for-age,
+  triceps skinfold-for-age, arm circumference-for-age)
+* Update packaging
+
 Version 0.8.0 released 2015-06-26
 * drop beta from version so pip will install the correct/latest
 

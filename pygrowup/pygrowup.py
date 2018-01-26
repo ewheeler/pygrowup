@@ -1,500 +1,490 @@
-#!/usr/bin/env python
-# vim: ai ts=4 sts=4 et sw=4
-import os
-import math
-import decimal
-import logging
-import json
-from decimal import Decimal as D
-
-import six
+from decimal import Decimal, getcontext as get_decimal_context
+from importlib import import_module
 
 from . import exceptions
 
-
-# TODO is this the best way to get this file's directory?
-module_dir = os.path.split(os.path.abspath(__file__))[0]
+WEIGHT_BASED_INDICATORS = {
+    "wfa",
+    "wfl",
+    "wfh",
+    "bmifa",
+    # Note: the WHO technical documentation doesn't discuss skinfold z-score
+    # computation, but it appears that tests pass when the weight-based
+    # adjustments are applied.
+    "ssfa",
+    "tsfa",
+    }
 
 
 class Observation(object):
-    def __init__(self, indicator, measurement, age_in_months, sex,
-                 height, american, logger_name):
-        self.logger = logging.getLogger(logger_name)
 
-        self.indicator = indicator
-        self.measurement = measurement
-        self.position = None
-        self.age = D(age_in_months)
-        self.sex = sex.upper()
-        self.height = height
-        self.american = american
+    MALE = "male"
+    FEMALE = "female"
+    SEXES = (MALE, FEMALE)
+    t = None  # age of child (in days) at observation
 
-        self.table_indicator = None
-        self.table_age = None
-        self.table_sex = None
-        if self.indicator in ['wfl', 'wfh']:
-            if self.height in ['', ' ', None]:
-                raise exceptions.InvalidMeasurement('no length or height')
+    def __init__(self, sex, age_in_days=None, age_in_months=None, dob=None,
+                 date_of_observation=None):
+        """Initialize an Observation.
 
-    @property
-    def age_in_weeks(self):
-        return ((self.age * D('30.4374')) / D(7))
+        Args:
+            sex: constant; one of MALE or FEMALE
+            age_in_days: int
+            age_in_months: int, float, or Decimal
+            dob: child's date of birth. datetime.date instance
+            date_of_observation: datetime.date instance
 
-    @property
-    def rounded_height(self):
-        """ Rounds height to closest half centimeter -- the resolution
-            of the WHO tables. Oddly, the WHO tables do not include
-            decimal places for whole centimeters, so some strange
-            rounding is necessary (e.g., 89 not 89.0).
+        Under most circumstances, an age must be supplied (or implied) by
+        specifying age_in_months, age_in_days, or dob AND date_of_observation.
+        (The exception to this is when the *only* z-score to be calculated is
+        weight for length/height.)
         """
-        # round height to closest half centimeter
-        correction = D('0.5') if D(self.height) >= D(0) else D('-0.5')
-        rounded = int(D(self.height) / D('0.5') + correction) * D('0.5')
-        # if closest half centimeter is an integer,
-        # return as integer without decimal
-        if rounded.as_tuple().digits[-1] == 0:
-            return D(int(rounded)).to_eng_string()
-        # otherwise return with decimal places
-        return rounded.to_eng_string()
+        if sex not in self.SEXES:
+            raise exceptions.ImproperlySpecifiedSex(
+                "Sex must be either '%s' or '%s'" % self.SEXES
+                )
+        self.sex = sex
+        if age_in_days:
+            try:
+                self.t = int(age_in_days)
+            except:
+                raise exceptions.ImproperlySpecifiedAge(
+                    "age_in_days must be numeric"
+                    )
+        elif age_in_months:
+            try:
+                age_in_months = Decimal(age_in_months)
+            except:
+                raise exceptions.ImproperlySpecifiedAge(
+                    "age_in_months must be numeric"
+                    )
+            days_per_month = Decimal("365.25") / Decimal(12)
+            # (Coercing Decimal => int is the same as taking its floor.)
+            self.t = int(age_in_months * days_per_month)
+        elif dob and date_of_observation:
+            try:
+                self.t = (date_of_observation - dob).days
+            except:
+                raise exceptions.ImproperlySpecifiedAge(
+                    "dob and date_of_observation must be datetime.date or "
+                    "datetime.datetime instances"
+                    )
+        if self.t < 0:
+            raise exceptions.ImproperlySpecifiedAge(
+                "date_of_observation must be later than dob"
+                )
 
-    def get_zscores(self, growth):
-        table_name = self.resolve_table()
-        table = getattr(growth, table_name)
-        if self.indicator in ["wfh", "wfl"]:
-            assert self.height is not None
-            if D(self.height) < D(45):
-                raise exceptions.InvalidMeasurement("too short")
-            if D(self.height) > D(120):
-                raise exceptions.InvalidMeasurement("too tall")
-            # find closest height from WHO table (which has data at a resolution
-            # of half a centimeter).
-            # round height to closest tenth of a centimeter
-            # NOTE heights in tables are EITHER ints or floats!
-            # (e.g., 60, 60.5)
-            closest_height = self.rounded_height
-            self.logger.debug("looking up scores with: %s" % closest_height)
-            scores = table.get(closest_height)
-            if scores is not None:
-                return scores
-            raise exceptions.DataNotFound("SCORES NOT FOUND BY HEIGHT: %s => "
-                                          "%s" % (self.height, closest_height))
+    def _get_box_cox_variables(self, table_name, sex, t):
+        """Look up & return the l, m, s values for a given growth standard,
+        sex, and t value.
 
-        elif self.indicator in ["lhfa", "wfa", "bmifa", "hcfa"]:
-            if self.age_in_weeks <= D(13):
-                closest_week = str(int(math.floor(self.age_in_weeks)))
-                scores = table.get(closest_week)
-                if scores is not None:
-                    return scores
-                raise exceptions.DataNotFound("SCORES NOT FOUND BY WEEK: %s => "
-                                              " %s" % (str(self.age_in_weeks),
-                                                       closest_week))
-            closest_month = str(int(math.floor(self.age)))
-            scores = table.get(closest_month)
-            if scores is not None:
-                return scores
-            raise exceptions.DataNotFound("SCORES NOT FOUND BY MONTH: %s =>"
-                                          " %s" % (str(self.age),
-                                                   closest_month))
+        Args:
+            table_name: one of our abbreviated names for the growth standards.
+                (str)
+            sex: either "male" or "female".
+            y: the measurement in question (float or Decimal)
+            t: age in days (int) or, for weight-for-length/height,
+                length/height measurement in cm (Decimal)
 
-    def resolve_table(self):
-        """ Choose a WHO/CDC table to use, making adjustments
-        based on age, length, or height. If, for example, the
-        indicator is set to wfl while the child is too long for
-        the recumbent tables, this method will make the lookup
-        in the wfh table. """
-        if self.indicator == 'wfl' and D(self.height) > D(86):
-            self.logger.warning('too long for recumbent')
-            self.table_indicator = 'wfh'
-            self.table_age = '2_5'
-        elif self.indicator == 'wfh' and D(self.height) < D(65):
-            self.logger.warning('too short for standing')
-            self.table_indicator = 'wfl'
-            self.table_age = '0_2'
+        Returns:
+            Dict with keys "l", "m", and "s".
+
+        Raises:
+            KeyError
+        """
+        # We have by-day data for all age-related metrics up to 5 years of age.
+        # The two by-weight metrics' data are housed in the same place--their
+        # t values will be Decimals.
+        if t != self.t or t <= 1856:
+            module_path = "pygrowup.tables.by_day.%s" % (table_name)
         else:
-            self.table_indicator = self.indicator
-            if self.table_indicator == 'wfl':
-                self.table_age = '0_2'
-            if self.table_indicator == 'wfh':
-                self.table_age = '2_5'
+            # Must be an age-based metric for an age over 5 years. Round
+            # age (in days) to nearest month.
+            t = round(t / (365/12.))
+            module_path = "pygrowup.tables.by_month.%s" % (table_name)
+        try:
+            source = import_module(module_path)
+        except ImportError:
+            # We're assuming that this age range has been vetted already, so
+            # this isn't a case of, say, trying to get the head circumference
+            # for a 10-year-old.
+            raise exceptions.PyGrowUpException(
+                "Unknown growth standard name (%s)" % table_name
+                )
+        table = source.DATA
+        by_sex = table.get(sex)
+        if not by_sex:
+            raise exceptions.PyGrowUpException(
+                "Can't find data by sex (%s)" % sex
+                )
+        result = by_sex.get(t)
+        if not result:
+            raise exceptions.ZScoreError(
+                "t value out of range or not found (%s)" % t
+                )
+        return result
 
-        if self.sex == 'M':
-            self.table_sex = 'boys'
-        if self.sex == 'F':
-            self.table_sex = 'girls'
+    def _get_first_pass_z_score(self, y, l, m, s):
+        """Calculate and return a "first-pass" z-score given the key inputs
+        derived from a child's age (or in some cases, length/height).
 
-        # weight for age has only one table per sex,
-        # as does head circumference for age
-        # and CDC goes unused before 24mos
-        if self.indicator in ["wfa", "lhfa", "hcfa"]:
-            self.table_age = "0_5"
-            if self.age <= D(3):
-                if self.age_in_weeks <= D(13):
-                    self.table_age = "0_13"
-            if self.american and self.age >= D(24):
-                if self.indicator == "hcfa":
-                    raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
-                self.table_age = "2_20"
-        elif self.indicator in ["bmifa"]:
-            if self.age > D(240):
-                raise exceptions.InvalidAge('TOO OLD: %d' % self.age)
-            elif self.age <= D(3) and self.age_in_weeks <= D(13):
-                self.table_age = "0_13"
-            elif self.age < D(24):
-                self.table_age = '0_2'
-            elif self.age >= D(24) and self.age <= D(60):
-                self.table_age = '2_5'
-            elif self.age >= D(24) and self.age > D(60):
-                self.table_age = '2_20'
-            else:
-                raise exceptions.DataNotFound()
-        else:
-            if self.table_age is None:
-                if self.table_indicator == 'wfl':
-                    self.table_age = '0_2'
-                if self.table_indicator == 'wfh':
-                    self.table_age = '2_5'
-                if self.age < D(24):
-                    if self.table_indicator == 'wfh':
-                        self.logger.warning('too young for standing')
-                        self.table_indicator == 'wfl'
-                    self.table_age = '0_2'
-                elif self.age >= D(24):
-                    if self.table_indicator == 'wfl':
-                        self.logger.warning('too old for recumbent')
-                        self.table_indicator == 'wfh'
-                    self.table_age = '2_5'
-                else:
-                    raise exceptions.DataNotFound()
-        table = "%(table_indicator)s_%(table_sex)s_%(table_age)s" %\
-                {"table_indicator": self.table_indicator,
-                 "table_sex": self.table_sex,
-                 "table_age": self.table_age}
-        self.logger.debug(table)
-        # raise if any table name parts have not been resolved
-        if not all([self.table_indicator, self.table_sex, self.table_age]):
-            raise exceptions.DataError()
-        return table
+        ("First-pass" in this case refers to the fact that certain weight-based
+        metrics require further refinement when -3 < z < 3.)
 
+        The naming of the variables corresponds with the nomenclature in
+        "WHO Child Growth Standards: Methods and development". See Chapter 7:
+        "Computation of centiles and z-scores"
+        http://www.who.int/entity/childgrowth/standards/technical_report/en/
 
-class Calculator(object):
+        The age (or length/height for wfl/wfh) referenced above is called "t",
+        and is not dealt with directly in this method, but it is referenced
+        below in the args
 
-    def __reformat_table(self, table_name):
-        """ Reformat list of dicts to single dict
-        with each item keyed by age, length, or height."""
-        list_of_dicts = getattr(self, table_name)
-        if 'Length' in list_of_dicts[0]:
-            field_name = 'Length'
-        elif 'Height' in list_of_dicts[0]:
-            field_name = 'Height'
-        elif 'Month' in list_of_dicts[0]:
-            field_name = 'Month'
-        elif 'Week' in list_of_dicts[0]:
-            field_name = 'Week'
-        else:
-            raise exceptions.DataError('error loading: %s' % table_name)
-        new_dict = {'field_name': field_name}
-        for d in list_of_dicts:
-            new_dict.update({d[field_name]: d})
-        setattr(self, table_name, new_dict)
+        Args:
+            y: the measurement in question (float or Decimal)
+            l: aka L(t); Box-Cox power for t (Decimal)
+            m: aka M(t); median for t (Decimal)
+            s: aka S(t); coefficient of variation for t (Decimal)
 
-    def __init__(self, adjust_height_data=False, adjust_weight_scores=False,
-                 include_cdc=False, logger_name='pygrowup', log_level="INFO"):
-        self.logger = logging.getLogger(logger_name)
-        self.logger.setLevel(getattr(logging, log_level))
-
-        # use decimal.Decimal instead of float to avoid unwanted rounding
-        # http://docs.sun.com/source/806-3568/ncg_goldberg.html
-        # TODO set a custom precision
-        self.context = decimal.getcontext()
-
-        # Height adjustments are part of the WHO specification
-        # (to correct for recumbent vs standing measurements),
-        # but none of the existing software seems to implement this.
-        # default is false so values are closer to those produced
-        # by igrowup software
-        self.adjust_height_data = adjust_height_data
-
-        # WHO specs include adjustments to z-scores of weight-based
-        # indicators that are greater than +/- 3 SDs. These adjustments
-        # correct for right skewness and avoid making assumptions about
-        # the distribution of data beyond the limits of the observed values.
-        # However, when calculating z-scores in a live data collection
-        # situation, z-scores greater than +/- 3 SDs are likely to indicate
-        # data entry or anthropometric measurement errors and should not
-        # be adjusted. Instead, these large z-scores should be used to
-        # identify poor data quality and/or entry errors.
-        # These z-score adjustments are appropriate only when there
-        # is confidence in data quality.
-        self.adjust_weight_scores = adjust_weight_scores
-
-        self.include_cdc = include_cdc
-
-        # load WHO Growth Standards
-        # http://www.who.int/childgrowth/standards/en/
-        # WHO tab-separated txt files have been converted to json,
-        # and the seperate lhfa tables (0-2 and 2-5) have been combined
-
-        WHO_tables = [
-            'wfl_boys_0_2_zscores.json',  'wfl_girls_0_2_zscores.json',
-            'wfh_boys_2_5_zscores.json',  'wfh_girls_2_5_zscores.json',
-            'lhfa_boys_0_5_zscores.json', 'lhfa_girls_0_5_zscores.json',
-            'hcfa_boys_0_5_zscores.json', 'hcfa_girls_0_5_zscores.json',
-            'wfa_boys_0_5_zscores.json',  'wfa_girls_0_5_zscores.json',
-            'wfa_boys_0_13_zscores.json',  'wfa_girls_0_13_zscores.json',
-            'lhfa_boys_0_13_zscores.json', 'lhfa_girls_0_13_zscores.json',
-            'hcfa_boys_0_13_zscores.json', 'hcfa_girls_0_13_zscores.json',
-            'bmifa_boys_0_13_zscores.json', 'bmifa_girls_0_13_zscores.json',
-            'bmifa_boys_0_2_zscores.json',  'bmifa_girls_0_2_zscores.json',
-            'bmifa_boys_2_5_zscores.json',  'bmifa_girls_2_5_zscores.json']
-
-        # load CDC growth standards
-        # http://www.cdc.gov/growthcharts/
-        # CDC csv files have been converted to JSON, and the third standard
-        # deviation has been fudged for the purpose of this tool.
-
-        CDC_tables = [
-            'lhfa_boys_2_20_zscores.cdc.json',
-            'lhfa_girls_2_20_zscores.cdc.json',
-            'wfa_boys_2_20_zscores.cdc.json',
-            'wfa_girls_2_20_zscores.cdc.json',
-            'bmifa_boys_2_20_zscores.cdc.json',
-            'bmifa_girls_2_20_zscores.cdc.json', ]
-
-        # TODO is this the best way to find the tables?
-        table_dir = os.path.join(module_dir, 'tables')
-        tables_to_load = WHO_tables
-        if self.include_cdc:
-            tables_to_load = tables_to_load + CDC_tables
-        for table in tables_to_load:
-            table_file = os.path.join(table_dir, table)
-            with open(table_file, 'r') as f:
-                # drop _zscores.json from table name and use
-                # result as attribute name
-                # (e.g., wfa_boys_0_5_zscores.json => wfa_boys_0_5)
-                table_name, underscore, zscore_part =\
-                    table.split('.')[0].rpartition('_')
-                setattr(self, table_name, json.load(f))
-                self.__reformat_table(table_name)
-
-    # convenience methods
-    def lhfa(self, measurement=None, age_in_months=None, sex=None, height=None):
-        """ Calculate length/height-for-age """
-        return self.zscore_for_measurement('lhfa', measurement=measurement,
-                                           age_in_months=age_in_months,
-                                           sex=sex, height=height)
-
-    def wfl(self, measurement=None, age_in_months=None, sex=None, height=None):
-        """ Calculate weight-for-length """
-        return self.zscore_for_measurement('wfl', measurement=measurement,
-                                           age_in_months=age_in_months,
-                                           sex=sex, height=height)
-
-    def wfh(self, measurement=None, age_in_months=None, sex=None, height=None):
-        """ Calculate weight-for-height """
-        return self.zscore_for_measurement('wfh', measurement=measurement,
-                                           age_in_months=age_in_months,
-                                           sex=sex, height=height)
-
-    def wfa(self, measurement=None, age_in_months=None, sex=None, height=None):
-        """ Calculate weight-for-age """
-        return self.zscore_for_measurement('wfa', measurement=measurement,
-                                           age_in_months=age_in_months,
-                                           sex=sex, height=height)
-
-    def bmifa(self, measurement=None, age_in_months=None, sex=None, height=None):
-        """ Calculate body-mass-index-for-age """
-        return self.zscore_for_measurement('bmifa', measurement=measurement,
-                                           age_in_months=age_in_months,
-                                           sex=sex, height=height)
-
-    def hcfa(self, measurement=None, age_in_months=None, sex=None, height=None):
-        """ Calculate head-circumference-for-age """
-        return self.zscore_for_measurement('hcfa', measurement=measurement,
-                                           age_in_months=age_in_months,
-                                           sex=sex, height=height)
-
-    def zscore_for_measurement(self, indicator, measurement, age_in_months, sex, height=None):
-        assert sex is not None
-        assert isinstance(sex, six.string_types)
-        assert sex.upper() in ["M", "F"]
-        assert age_in_months is not None
-        assert indicator is not None
-        assert indicator.lower() in ["lhfa", "wfl", "wfh", "wfa", "bmifa", "hcfa"]
-        # reject blank measurements
-        assert measurement not in ['', ' ', None]
-
-        # this is our length or height or weight or bmi measurement.
-        # allow exception if measurement cannot be cast as Decimal
-        y = D(measurement)
-        if y <= D(0):
-            # reject measurements 0 or less because the math won't work.
-            # and that would be an impossibly shaped human.
-            raise exceptions.InvalidMeasurement('measurement must be greater'
-                                                ' than zero')
-        self.logger.debug("MEASUREMENT: %d" % y)
-
-        obs = Observation(indicator, measurement, age_in_months, sex, height,
-                          self.include_cdc, self.logger.name)
-
-        # indicator-specific methodology
-        # (see section 5.1 of http://www.who.int/entity/childgrowth/standards/\
-        #                                  technical_report/en/index.html)
-        #
-        # TODO accept a recumbent vs standing parameter for deciding
-        # whether or not to do these adjustments rather than assuming
-        # measurement orientation based on the measurement
-        if indicator == "wfl":
-            # subtract 0.7cm from length measurements in this range
-            # to adjust for child's reclined position
-            if (D('65.7') < y < D('120.7')):
-                y = y - D('0.7')
-
-        if indicator == "wfh" and self.adjust_height_data:
-            # add 0.7cm to all height measurements
-            # (basically to convert all height measurments to lengths)
-            y = y + D('0.7')
-
-        # get zscore from appropriate table
-        zscores = obs.get_zscores(self)
-
-        if zscores is None:
-            raise exceptions.DataNotFound()
-
-        # fetch necessary scores from zscores dict and cast as decimals
-        # L(t)
-        box_cox_power = D(zscores.get("L"))
-        self.logger.debug("BOX-COX: %d" % box_cox_power)
-        # M(t)
-        median_for_age = D(zscores.get("M"))
-        self.logger.debug("MEDIAN: %d" % median_for_age)
-        # S(t)
-        coefficient_of_variance_for_age = D(zscores.get("S"))
-        self.logger.debug("COEF VAR: %d" % coefficient_of_variance_for_age)
-
-        ###
-        # calculate z-score
-        #
-        # (see Chapter 7 of http://www.who.int/entity/childgrowth/standards/\
-        #                                  technical_report/en/index.html)
+        The returned value of this method is computed based on the formula
+        found in that chapter. It will be a Decimal.
+        """
+        # Formula from Chapter 7:
         #
         #           [y/M(t)]^L(t) - 1
         #   Zind =  -----------------
         #               S(t)L(t)
-        ###
-        base = self.context.divide(y, median_for_age)
-        self.logger.debug("BASE: %d" % base)
-        power = base ** box_cox_power
-        self.logger.debug("POWER: %d" % power)
-        numerator = D(str(power)) - D(1)
-        self.logger.debug("NUMERATOR: %d" % numerator)
-        denomenator = self.context.multiply(coefficient_of_variance_for_age,
-                                            box_cox_power)
-        self.logger.debug("DENOMENATOR: %d" % denomenator)
-        zscore = self.context.divide(numerator, denomenator)
-        self.logger.debug("ZSCORE: %d" % zscore)
+        context = get_decimal_context()
+        base = context.divide(y, m)
+        power = base ** l
+        numerator = power - Decimal(1)
+        denominator = context.multiply(s, l)
+        zscore = context.divide(numerator, denominator)
+        return zscore.quantize(Decimal(".01"))
 
-        # TODO this is probably unneccesary, as it should work out to be the
-        # same as the above z-score calculation
-        # if indicator == "lhfa":
-        #    numerator_lhfa = self.context.subtract(D(y), median_for_age)
-        #    denomenator_lhfa = self.context.multiply(median_for_age,\
-        #        coefficient_of_variance_for_age)
-        #    zscore_lhfa = self.context.divide(numerator_lhfa, denomenator_lhfa)
-        #    zscore = zscore_lhfa
+    def _adjust_weight_based_z_score(self, z_score, y, l, m, s):
+        """Adjust first-pass z_score and return new value.
 
-        # return z-score unless adjust_weight_scores indicates that
-        # further processing is desired (see comment in __init__())
-        if not self.adjust_weight_scores:
-            # round to hundreth and return
-            return zscore.quantize(D('.01'))
+        To be used in cases where first-pass value is > 3 or < -3.
+
+        See Chapter 7 of "Computation of centiles and z-scores" referenced
+        above for the formulae.
+        """
+        context = get_decimal_context()
+        exp = context.divide(Decimal(1), l)
+        if z_score > Decimal("3"):
+            # Formula:
+            #             y - SD3pos
+            # z*ind = 3 + ----------
+            #              SD23pos
+            # Where:
+            # SD3pos = M(t)[1 + L(t)*S(t)*(3)]^1/L(t) and
+            # SD23pos = M(t)[1 + L(t)*S(t)*(3)]^1/L(t) -
+            #           M(t)[1 + L(t)*S(t)*(2)]^1/L(t)
+            SD3pos_base = Decimal(1) + l * s * Decimal(3)
+            SD3pos = m * SD3pos_base ** exp
+            SD23pos_1 = Decimal(1) + l * s * Decimal(3)
+            SD23pos_2 = Decimal(1) + l * s * Decimal(2)
+            SD23pos = m * (SD23pos_1 ** exp) - m * (SD23pos_2 ** exp)
+            z_score = Decimal(3) + context.divide((y - SD3pos), SD23pos)
+        elif z_score < Decimal(-3):
+            # Formula:
+            #              y - SD3neg
+            # z*ind = -3 + ----------
+            #               SD23neg
+            SD3neg_base = Decimal(1) + l * s * Decimal(-3)
+            SD3neg = m * SD3neg_base ** exp
+            SD23neg_1 = Decimal(1) + l * s * Decimal(-2)
+            SD23neg_2 = Decimal(1) + l * s * Decimal(-3)
+            SD23neg = m * (SD23neg_1 ** exp) - m * (SD23neg_2 ** exp)
+            z_score = Decimal(-3) + context.divide((y - SD3neg), SD23neg)
+        return z_score.quantize(Decimal(".01"))
+
+    def _validate_t(self, t=None, lower=0, upper=None, msg=None):
+        """Validate that the value t (self.t; in days, unless overridden) is
+        within the range for a particular growth metric. Both boundaries are
+        inclusive.
+
+        Args:
+            t: length or height value, when the metric is not "for-age". opt.
+                float or Decimal
+            lower: minimum number of days supported for a metric. int
+            upper: maximum number of days supported for a metric. int
+            msg: description of range. str
+
+        Raises:
+            MissingAgeError: if t is not supplied.
+            AgeOutOfRangeError: if t is out of range
+        Returns:
+            None
+        """
+        if not msg:
+            msg = "Range is %s to %s" % (lower, upper)
+        t = t if t else self.t
+        if t is None:
+            msg = "No time data supplied. %s" % msg
+            raise exceptions.MissingAgeError(msg)
+
+        msg = '"t" value {t} outside of range. {range_descr}'.format(
+            t=t, range_descr=msg
+            )
+        if t < lower:
+            raise exceptions.AgeOutOfRangeError(msg)
+        if upper and t > upper:
+            raise exceptions.AgeOutOfRangeError(msg)
+
+    def _validate_measurement(self, measurement, lower, upper, msg=None):
+        """Validate that the measurement value is within the range for a
+        particular growth metric. Both boundaries are inclusive. The range
+        should be very, very generous!
+
+        Args:
+            y: The measurement in question. int, float, Decimal
+            lower: minimum number of days supported for a metric. int
+            upper: maximum number of days supported for a metric. int
+            msg: description of range. str
+
+        Raises:
+            MeasurementOutOfRangeError if measurement is outside the range.
+            ImproperlySpecifiedMeasurement if measurement is not numeric.
+        Returns:
+            measurement value as Decimal
+        """
+        if not msg:
+            msg = "Range is %s to %s" % (lower, upper)
+        if not measurement:  # 0 isn't legitimate!
+            msg = "No measurement supplied. %s" % msg
+            raise exceptions.ImproperlySpecifiedMeasurement(msg)
+
+        try:
+            y = Decimal(measurement)
+        except:
+            raise exceptions.ImproperlySpecifiedMeasurement(
+                "Measurement must be numeric."
+                )
+
+        msg = "Measurement value {y} outside of range. {range_descr}".format(
+            y=measurement, range_descr=msg
+            )
+        if y < lower:
+            raise exceptions.MeasurementOutOfRangeError(msg)
+        if upper and y > upper:
+            raise exceptions.MeasurementOutOfRangeError(msg)
+        return y
+
+    def get_z_score(self, table_name, sex, y, t):
+        """Calculate and return a z-score.
+
+        Args:
+            table_name: one of our abbreviated names for the growth standards.
+                (str)
+            sex: either "male" or "female".
+            y: the measurement in question (float or Decimal)
+            t: age in days (int) or, for weight-for-length/height,
+                length/height measurement in cm (Decimal)
+
+        Returns:
+            Decimal
+        Raises:
+            ValueError for exceptional values of y or t.
+        """
+        lms = self._get_box_cox_variables(table_name, sex, t)
+        z_score = self._get_first_pass_z_score(y, **lms)
+        if table_name in WEIGHT_BASED_INDICATORS and abs(z_score) > Decimal(3):
+            z_score = self._adjust_weight_based_z_score(z_score, y, **lms)
+        return z_score
+
+    def acfa(self, measurement, use_extra_data=False):
+        """Return the arm circumference-for-age z-score (aka MUAC).
+
+        When using WHO data, the valid age range is 3 months to 5 years. If
+        use_extra_data is set to True, the Mramba, et al, data set is available
+        for children between 5 and 19 years. See README for details on this.
+
+        Args:
+            measurement: mid-upper arm circumference measurement (in cm).
+                float or Decimal
+            use_extra_data: allow the usage of an additional data set to serve
+                children 5-19. Bool.
+        """
+        if use_extra_data:
+            self._validate_t(
+                lower=91, upper=19*365.25,
+                msg="Range is 3 months to 19 years when use_extra_data is "
+                "True."
+                )
         else:
-            if indicator not in ["wfl", "wfh", "wfa"]:
-                # return length/height-for-age (lhfa) without further processing
-                # L(t) is always 1 for this indicator, so differences between
-                # adjacent SDs (e.g., 2 SD and 3 SD) are constant for a specific
-                # age but varied at different ages
-                return zscore.quantize(D('.01'))
-            elif (abs(zscore) <= D(3)):
-                # (see below comment)
-                return zscore.quantize(D('.01'))
-            else:
-                # weight-based indicators present right-skewed distributions
-                # so use restricted application of LMS method (limiting Box-Cox
-                # normal distribution to interval corresponding to z-scores where
-                # empirical data are available. z-scores beyond +/- 3 SDs are
-                # fixed to the distance between +/- 2 SDs and +/- 3 SD
-                # this avoids making assumptions about the distribution of data
-                # beyond the limits of observed values
-                #
-                #            _
-                #           |
-                #           |       Zind            if |Zind| <= 3
-                #           |
-                #           |
-                #           |       y - SD3pos
-                #   Zind* = | 3 + ( ----------- )   if Zind > 3
-                #           |         SD23pos
-                #           |
-                #           |
-                #           |
-                #           |        y - SD3neg
-                #           | -3 + ( ----------- )  if Zind < -3
-                #           |          SD23neg
-                #           |
-                #           |_
-                def calc_stdev(sd):
-                    #   e.g.,
-                    #
-                    #   SD3neg = M(t)[1 + L(t) * S(t) * (-3)]^ 1/L(t)
-                    #   SD2pos = M(t)[1 + L(t) * S(t) * (2)]^ 1/L(t)
-                    #
-                    ###
-                    base = self.context.add(D(1), self.context.multiply(
-                        self.context.multiply(box_cox_power,
-                                              coefficient_of_variance_for_age), D(sd)))
-                    exponent = self.context.divide(D(1), box_cox_power)
-                    power = math.pow(base, exponent)
-                    stdev = self.context.multiply(median_for_age, D(str(power)))
-                    return D(stdev)
+            self._validate_t(
+                lower=91, upper=1856,
+                msg="Range is 3 months to 5 years. Pass use_extra_data=True "
+                "for children 5-19."
+                )
+        upper_bound = 60 if use_extra_data else 40
+        y = self._validate_measurement(measurement, 3, upper_bound)
+        return self.get_z_score(
+            table_name="acfa",
+            y=y,
+            sex=self.sex,
+            t=self.t,
+            )
 
-                if (zscore > D(3)):
-                    logging.info("Z greater than 3")
-                    # TODO measure performance of lookup vs calculation
-                    # calculate for now so we have greater precision
+    def bmifa(self, measurement):
+        """Return the BMI (body mass index)-for-age z-score.
 
-                    # get cutoffs from z-scores dict
-                    # SD2pos = D(zscores.get("SD2"))
-                    # SD3pos = D(zscores.get("SD3"))
+        Args:
+            measurement: BMI value. float or Decimal
+        """
+        self._validate_t(
+            lower=0, upper=19*365, msg="Range is birth to 19 years."
+            )
+        y = self._validate_measurement(measurement, 5, 60)
+        return self.get_z_score(
+            table_name="bmifa",
+            y=y,
+            sex=self.sex,
+            t=self.t,
+            )
 
-                    # calculate SD
-                    SD2pos_c = calc_stdev(2)
-                    SD3pos_c = calc_stdev(3)
+    def hcfa(self, measurement):
+        """Return the head circumference-for-age z-score.
 
-                    # compute distance
-                    SD23pos_c = SD3pos_c - SD2pos_c
+        Args:
+            measurement: head circumference measurement (in cm).
+                float or Decimal
+        """
+        self._validate_t(
+            lower=0, upper=1856, msg="Range is birth to 5 years."
+            )
+        y = self._validate_measurement(measurement, 10, 150)
+        return self.get_z_score(
+            table_name="hcfa",
+            y=y,
+            sex=self.sex,
+            t=self.t,
+            )
 
-                    # compute final z-score
-                    # zscore = D(3) + ((y - SD3pos_c)/SD23pos_c)
-                    sub = self.context.subtract(D(y), SD3pos_c)
-                    div = self.context.divide(sub, SD23pos_c)
-                    zscore = self.context.add(D(3), div)
-                    return zscore.quantize(D('.01'))
+    def lhfa(self, measurement, recumbent=False, auto_adjust=True):
+        """Return the length/height-for-age z-score.
 
-                if (zscore < D(-3)):
-                    # get cutoffs from z-scores dict
-                    # SD2neg = D(zscores.get("SD2neg"))
-                    # SD3neg = D(zscores.get("SD3neg"))
+        Args:
+            measurement: length measurement (in cm) as float or Decimal
+            recumbent: was the measurement taken with child lying down? Ignored
+                for children under 2 years, or if auto_adjust is False. Bool.
+            auto_adjust: if child is over 2 years and measured recumbently,
+                adjust the measurement to convert to a (simulated) height.
+                Bool.
+        """
+        self._validate_t(
+            lower=0, upper=19*365, msg="Range is birth to 19 years."
+            )
+        y = self._validate_measurement(measurement, 10, 200)
+        if self.t >= 365 * 2 and auto_adjust and recumbent:
+            y -= Decimal("0.7")
+        return self.get_z_score(
+            table_name="lfa",
+            y=y,
+            sex=self.sex,
+            t=self.t,
+            )
 
-                    # calculate SD
-                    SD2neg_c = calc_stdev(-2)
-                    SD3neg_c = calc_stdev(-3)
+    def ssfa(self, measurement):
+        """Return the subscapular skinfold-for-age z-score.
 
-                    # compute distance
-                    SD23neg_c = SD2neg_c - SD3neg_c
+        Args:
+            measurement: measurement (in mm) as float or Decimal
+        """
+        self._validate_t(
+            lower=91, upper=1856, msg="Range is 3 months to 5 years."
+            )
+        y = self._validate_measurement(measurement, 1, 30)
+        return self.get_z_score(
+            table_name="ssfa",
+            y=y,
+            sex=self.sex,
+            t=self.t,
+            )
 
-                    # compute final z-score
-                    # zscore = D(-3) + ((y - SD3neg_c)/SD23neg_c)
-                    sub = self.context.subtract(D(y), SD3neg_c)
-                    div = self.context.divide(sub, SD23neg_c)
-                    zscore = self.context.add(D(-3), div)
-                    return zscore.quantize(D('.01'))
+    def tsfa(self, measurement):
+        """Return the triceps skinfold-for-age z-score.
+
+        Args:
+            measurement: measurement (in mm) as float or Decimal
+        """
+        self._validate_t(
+            lower=91, upper=1856, msg="Range is 3 months to 5 years."
+            )
+        y = self._validate_measurement(measurement, 1, 30)
+        return self.get_z_score(
+            table_name="tsfa",
+            y=y,
+            sex=self.sex,
+            t=self.t,
+            )
+
+    def wfa(self, measurement):
+        """Return the weight-for-age z-score.
+
+        Args:
+            measurement: weight measurement (in kg) as float or Decimal
+        """
+        self._validate_t(
+            lower=0, upper=10*365, msg="Range is birth to 10 years."
+            )
+        y = self._validate_measurement(measurement, 1, 125)
+        return self.get_z_score(
+            table_name="wfa",
+            y=y,
+            sex=self.sex,
+            t=self.t,
+            )
+
+    def wfh(self, weight, height):
+        """Return the weight-for-height z-score for the supplied inputs.
+
+        Args:
+            weight: weight measurement (in kg) as float or Decimal
+            height: height measurement (in cm) as float or Decimal
+        """
+        t = Decimal(height).quantize(Decimal("1.0"))
+        self._validate_t(
+            t=t, lower=65, upper=120,
+            msg="Height range is 65cm to 120 cm."
+            )
+        y = self._validate_measurement(weight, 1, 125)
+        return self.get_z_score(
+            table_name="wfh",
+            y=y,
+            sex=self.sex,
+            t=t,
+            )
+
+    def wfl(self, weight, length):
+        """Return the weight-for-length z-score for the supplied inputs.
+
+        Args:
+            weight: weight measurement (in kg) as float or Decimal
+            length: length measurement (in cm) as float or Decimal
+        """
+        t = Decimal(length).quantize(Decimal("1.0"))
+        self._validate_t(
+            t=t, lower=45, upper=110,
+            msg="Length range is 45cm to 110 cm.",
+            )
+        y = self._validate_measurement(weight, 1, 125)
+        return self.get_z_score(
+            table_name="wfl",
+            y=y,
+            sex=self.sex,
+            t=t,
+            )
+
+    # More verbose aliases for our metrics methods, in case you're into that.
+    arm_circumference_for_age = acfa
+    bmi_for_age = bmifa
+    head_circumference_for_age = hcfa
+    length_or_height_for_age = lhfa
+    subscapular_skinfold_for_age = ssfa
+    triceps_skinfold_for_age = tsfa
+    weight_for_age = wfa
+    weight_for_height = wfh
+    weight_for_length = wfl

@@ -1,0 +1,20 @@
+Metadata-Version: 1.1
+Name: pygrowup
+Version: 0.1.1a0
+Summary: Calculate z-scores of anthropometric measurements based on WHO child growth standards
+Home-page: https://github.org/jbaldivieso/pygrowup2
+Author: Jon Baldivieso
+Author-email: jbaldivieso@gmail.com
+License: GPLv3
+Description-Content-Type: UNKNOWN
+Description: UNKNOWN
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: POSIX

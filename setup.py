@@ -1,36 +1,39 @@
-#!/usr/bin/env python
-# vim: ai ts=4 sts=4 et sw=4
+import os
+import os.path
 from setuptools import setup, find_packages
+
+
+def get_readme(fname):
+    return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 
 setup(
     name="pygrowup",
     version=__import__('pygrowup').get_version().replace(' ', '-'),
-    license="BSD",
-
     packages=find_packages(),
-    include_package_data=True,
 
-    author="Evan Wheeler",
-    author_email="evanmwheeler@gmail.com",
-
-    maintainer="Evan Wheeler",
-    maintainer_email="evanmwheeler@gmail.com",
-
-    description="Calculate z-scores of anthropometric measurements based on WHO and CDC child growth standards",
-    long_description=open('README').read(),
-    url="http://github.com/ewheeler/pygrowup",
-    download_url="https://github.com/ewheeler/pygrowup/archive/0.8.2.tar.gz",
     install_requires=[
-        "six",
-    ],
+            'unittest2;python_version<"3.4"',
+        ],
+
+    author="Jon Baldivieso",
+    author_email="jbaldivieso@gmail.com",
+
+    maintainer="Jon Baldivieso",
+    maintainer_email="jbaldivieso@gmail.com",
+
+    description="Calculate z-scores of anthropometric measurements based on "
+    "WHO child growth standards",
+    # long_description=get_readme('README.md'),
+    license="GPLv3",
+    url="https://github.org/jbaldivieso/pygrowup2",
     classifiers=[
-        'Intended Audience :: Healthcare Industry',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'License :: OSI Approved :: BSD License',
-        'Topic :: Scientific/Engineering :: Bio-Informatics',
+        "Development Status :: 3 - Alpha",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: BSD License",
+        "Topic :: Scientific/Engineering :: Bio-Informatics",
         'Operating System :: MacOS :: MacOS X',
         'Operating System :: Microsoft :: Windows',
         'Operating System :: POSIX',

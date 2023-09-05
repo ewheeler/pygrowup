@@ -128,7 +128,7 @@ as well as more specific errors (all subclasses of `RuntimeError`):
 
 * `InvalidAge` raised when age is invalid for requested indicator
 
-* `DataNotFound` raised when WHO/CDC data is not found for the requested observation (e.g., box-cox, median, coeffeciant of vairance for age)
+* `DataNotFound` raised when WHO/CDC data is not found for the requested observation (e.g., box-cox, median, coefficient of variance for age)
 
 * `DataError` raised when an error occurs while loading WHO/CDC data into memory
 
